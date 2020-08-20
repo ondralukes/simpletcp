@@ -1,105 +1,141 @@
-#[cfg(test)]
-mod tests {
-    use crate::simpletcp::{TcpServer, Error, TcpStream};
-    use std::thread;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::time::Duration;
-
-    #[test]
-    fn can_create_server() {
-        TcpServer::new("127.0.0.1:1234").expect("Failed to create server");
-    }
-
-    #[test]
-    fn accept_none(){
-        let server = TcpServer::new("127.0.0.1:1234").expect("Failed to create server");
-        match server.accept().expect("Accept failed") {
-            None => {},
-            Some(_) => {
-                panic!("Accept returned Some but None was expected");
-            },
-        }
-    }
-}
-
-pub mod simpletcp{
-    use std::net;
+pub mod simpletcp {
+    use std::convert::TryInto;
     use std::fmt;
-    use std::io;
-    use std::net::{ToSocketAddrs, SocketAddr};
     use std::fmt::Formatter;
-    use std::io::ErrorKind;
+    use std::io;
+    use std::io::{ErrorKind, Read, Write};
+    use std::net;
+    use std::net::ToSocketAddrs;
 
-    pub enum Error{
+    #[cfg(test)]
+    mod tests;
+
+    pub enum Error {
         NotReady,
         EncryptionError,
-        TcpError(io::Error)
+        TcpError(io::Error),
     }
 
     impl fmt::Debug for Error {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             return match self {
-                Error::NotReady => {
-                    f.write_str("Error::NotReady")
-                },
-                Error::EncryptionError => {
-                    f.write_str("Error::EncryptionError")
-                },
-                Error::TcpError(io_err) => {
-                    f.write_fmt(format_args!("Error::TcpError: {}", io_err))
-                },
-            }
+                Error::NotReady => f.write_str("Error::NotReady"),
+                Error::EncryptionError => f.write_str("Error::EncryptionError"),
+                Error::TcpError(io_err) => f.write_fmt(format_args!("Error::TcpError: {}", io_err)),
+            };
         }
     }
 
-    impl From<io::Error> for Error{
+    impl From<io::Error> for Error {
         fn from(io_err: io::Error) -> Self {
             Error::TcpError(io_err)
         }
     }
 
-    pub struct TcpServer{
+    pub struct TcpServer {
         socket: net::TcpListener,
     }
 
-    impl TcpServer{
-        pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error>{
+    impl TcpServer {
+        pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
             let socket = net::TcpListener::bind(addr)?;
-            socket.set_nonblocking(true);
-            return Ok(TcpServer { socket });
+            socket.set_nonblocking(true)?;
+            return Ok(Self { socket });
         }
 
-        pub fn accept(&self) -> Result<Option<TcpStream>, Error>{
+        pub fn accept(&self) -> Result<Option<TcpStream>, Error> {
             match self.socket.accept() {
-                Ok((socket, addr)) => {
-                    Ok(Some(TcpStream::from_socket(socket)?))
-                },
-                Err(io_err) => {
-                    match io_err.kind() {
-                        ErrorKind::WouldBlock => {
-                            Ok(None)
-                        }
-                        _ => {
-                            Err(Error::TcpError(io_err))
-                        }
-                    }
+                Ok((socket, _addr)) => Ok(Some(TcpStream::from_socket(socket)?)),
+                Err(io_err) => match io_err.kind() {
+                    ErrorKind::WouldBlock => Ok(None),
+                    _ => Err(Error::TcpError(io_err)),
                 },
             }
         }
     }
 
+    macro_rules! try_io {
+        ($r: expr) => {
+            match $r {
+                Ok(res) => res,
+                Err(e) => match e.kind() {
+                    ErrorKind::WouldBlock => {
+                        return Ok(None);
+                    }
+                    _ => {
+                        return Err(Error::TcpError(e));
+                    }
+                },
+            }
+        };
+    }
+
     pub struct TcpStream {
-        socket: net::TcpStream
+        socket: net::TcpStream,
+        buffer: Vec<u8>,
     }
 
     impl TcpStream {
-        fn from_socket(socket: net::TcpStream) -> Result<Self, Error>{
+        fn from_socket(socket: net::TcpStream) -> Result<Self, Error> {
             socket.set_nonblocking(true)?;
-            Ok(
-                TcpStream{
-                    socket
+            Ok(Self {
+                socket,
+                buffer: Vec::new(),
+            })
+        }
+
+        pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
+            let socket = net::TcpStream::connect(addr)?;
+            socket.set_nonblocking(true)?;
+
+            Ok(Self {
+                socket,
+                buffer: Vec::new(),
+            })
+        }
+
+        #[allow(dead_code)]
+        fn write_raw(&mut self, msg: &[u8]) -> Result<(), Error> {
+            let length = msg.len() as u32;
+            self.socket.write(&length.to_le_bytes())?;
+            self.socket.write(msg)?;
+
+            Ok(())
+        }
+
+        #[allow(dead_code)]
+        fn read_raw(&mut self) -> Result<Option<Vec<u8>>, Error> {
+            if self.buffer.len() < 4 {
+                let start = self.buffer.len();
+                self.buffer.resize(4, 0);
+                let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]));
+
+                self.buffer.resize(start + bytes_read, 0);
+                if self.buffer.len() != 4 {
+                    println!("Not full len");
+                    return Ok(None);
                 }
-            )
+            }
+
+            println!("buf: {:?}", self.buffer);
+            let len = u32::from_le_bytes(self.buffer[..4].try_into().unwrap()) as usize;
+            println!("len = {}", len);
+
+            let start = self.buffer.len();
+            self.buffer.resize(4 + len, 0);
+            println!("bl = {}", self.buffer[start..].len());
+            let bytes_read = self.socket.read(&mut self.buffer[start..])?;
+            println!("s{} r {}", start, bytes_read);
+            self.buffer.resize(start + bytes_read, 0);
+            println!("buf: {:?}", self.buffer);
+            if self.buffer.len() == len + 4 {
+                println!("buf: {:?}", self.buffer);
+                let result = self.buffer[4..].to_vec();
+                self.buffer.clear();
+                return Ok(Some(result));
+            }
+
+            Ok(None)
         }
     }
 }
