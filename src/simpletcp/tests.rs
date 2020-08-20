@@ -80,3 +80,23 @@ fn raw_fragmented() {
     client.write(&[0, 0, 7]).unwrap();
     assert_eq!(s_client.read_raw().unwrap(), Some(vec![7]));
 }
+
+#[test]
+fn read_write(){
+    let server = TcpServer::new("127.0.0.1:1241").expect("Failed to create server");
+    let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
+    let mut s_client = server.accept().unwrap().unwrap();
+
+    client.write(&[1,2,3]).unwrap();
+    assert_eq!(s_client.read().unwrap(), Some(vec![1,2,3]));
+}
+
+#[test]
+fn read_write_cached(){
+    let server = TcpServer::new("127.0.0.1:1241").expect("Failed to create server");
+    let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
+    let mut s_client = server.accept().unwrap().unwrap();
+
+    s_client.write(&[1,2,3]).unwrap();
+    assert_eq!(client.read().unwrap(), Some(vec![1,2,3]));
+}
