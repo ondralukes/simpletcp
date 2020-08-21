@@ -25,9 +25,17 @@ pub mod simpletcp {
     #[cfg(test)]
     mod tests;
 
+    /// Error returned by all functions of TcpStream and TcpServer
     pub enum Error {
+        /// TcpStream is not ready yet
+        ///
+        /// Call [wait_until_ready](struct.TcpStream.html#method.wait_until_ready) or wait until [get_ready](struct.TcpStream.html#method.get_ready) returns `true`
         NotReady,
+
+        /// An error occurred during encryption/decryption
         EncryptionError(ErrorStack),
+
+        /// An error occurred during TCP operation
         TcpError(io::Error),
     }
 
@@ -63,22 +71,36 @@ pub mod simpletcp {
         Ready,
     }
 
+    /// TCP Server
+    ///
+    /// TcpServer used to accept new [TcpStreams](struct.TcpStream.html)
     pub struct TcpServer {
         socket: net::TcpListener,
         key: Rsa<Private>,
     }
 
     impl TcpServer {
+        /// Creates new TcpServer
+        ///
+        /// # Arguments
+        ///
+        /// * `addr` - Address to listen on
         pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
             let key = Rsa::generate(4096)?;
             Self::new_with_key(addr, key)
         }
-        pub fn new_with_key<A: ToSocketAddrs>(addr: A, key: Rsa<Private>) -> Result<Self, Error> {
+
+        fn new_with_key<A: ToSocketAddrs>(addr: A, key: Rsa<Private>) -> Result<Self, Error> {
             let socket = net::TcpListener::bind(addr)?;
             socket.set_nonblocking(true)?;
             return Ok(Self { socket, key });
         }
 
+        /// Accepts a client
+        ///
+        /// # Returns
+        ///
+        /// Returns accepted [TcpStream](struct.TcpStream.html) or `None` if there is no new connection
         pub fn accept(&self) -> Result<Option<TcpStream>, Error> {
             match self.socket.accept() {
                 Ok((socket, _addr)) => {
@@ -111,6 +133,9 @@ pub mod simpletcp {
         };
     }
 
+    /// Encrypted TCP stream
+    ///
+    /// Communication is encrypted using 256-bit AES-CBC, key is negotiated using 4096-bit RSA.
     pub struct TcpStream {
         socket: net::TcpStream,
         buffer: Vec<u8>,
@@ -133,6 +158,11 @@ pub mod simpletcp {
             })
         }
 
+        /// Connects to remote [TcpServer](struct.TcpServer.html)
+        ///
+        /// # Arguments
+        ///
+        /// * `addr` - Address of remote [TcpServer](struct.TcpServer.html)
         pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
             let socket = net::TcpStream::connect(addr)?;
             socket.set_nonblocking(true)?;
@@ -197,6 +227,10 @@ pub mod simpletcp {
             Ok(())
         }
 
+        /// Reads message
+        ///
+        /// # Returns
+        /// Returns `Some(Vec<u8>)` or `None` if no message has arrived
         pub fn read(&mut self) -> Result<Option<Vec<u8>>, Error> {
             if self.state != Ready {
                 return Ok(None);
@@ -214,6 +248,11 @@ pub mod simpletcp {
             }
         }
 
+        /// Writes message
+        ///
+        /// # Arguments
+        ///
+        /// * `msg` - Message to be sent
         pub fn write(&mut self, msg: &[u8]) -> Result<(), Error> {
             if self.state != Ready {
                 return Err(Error::NotReady);
@@ -229,6 +268,10 @@ pub mod simpletcp {
             self.write_raw(&raw)
         }
 
+        /// Blocks the thread until connection is ready to read and write messages
+        ///
+        /// # Notes
+        /// This method repeatedly calls [get_ready](struct.TcpStream.html#method.get_ready) until it returns `true`.
         pub fn wait_until_ready(&mut self) -> Result<(), Error> {
             while !self.get_ready()? {
                 //TODO: Poll the socket or something like that
@@ -237,6 +280,10 @@ pub mod simpletcp {
             Ok(())
         }
 
+        /// Tries to complete connection initialization
+        ///
+        /// # Returns
+        /// Retruns `true` if connection is ready, `false` otherwise
         pub fn get_ready(&mut self) -> Result<bool, Error> {
             if self.state == Ready {
                 return Ok(true);
