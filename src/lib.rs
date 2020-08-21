@@ -68,11 +68,19 @@ pub mod simpletcp {
         }
     }
 
+    /// Internal state of [TcpStream](struct.TcpStream.html)
     #[derive(PartialEq)]
     pub enum State {
+        /// [TcpStream](struct.TcpStream.html) is not initialized
         NotInitialized,
+
+        /// [TcpStream](struct.TcpStream.html) is waiting for server to send public key so it can encrypt symmetric key
         WaitingForPublicKey,
+
+        /// [TcpStream](struct.TcpStream.html) sent public key to the client and is waiting for client to send symmetric key
         WaitingForSymmKey,
+
+        /// Key was negotiated and [TcpStream](struct.TcpStream.html) is ready to send and receive data
         Ready,
     }
 
@@ -232,7 +240,7 @@ pub mod simpletcp {
             Ok(())
         }
 
-        /// Reads message
+        /// Reads a message
         ///
         /// # Returns
         /// Returns `Some(Message)` or `None` if no message has arrived
@@ -253,7 +261,7 @@ pub mod simpletcp {
             }
         }
 
-        /// Writes message
+        /// Writes a message
         ///
         /// # Arguments
         ///
@@ -362,11 +370,13 @@ pub mod simpletcp {
         }
     }
 
+    /// Message to be transmitted using [write](struct.TcpStream.html#method.write) or [read](struct.TcpStream.html#method.read)
     pub struct Message {
         buffer: Vec<u8>,
         read_pos: usize,
     }
 
+    /// Error occurred when encoding or decoding message
     pub enum MessageError {
         UnexpectedEnd,
     }
@@ -382,7 +392,7 @@ pub mod simpletcp {
     }
 
     impl Message {
-        /// Creates new, empty message
+        /// Creates a new empty message
         pub fn new() -> Message {
             Message {
                 buffer: Vec::new(),
