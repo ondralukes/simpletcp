@@ -38,6 +38,9 @@ pub mod simpletcp {
 
         /// An error occurred during TCP operation
         TcpError(io::Error),
+
+        /// TCP connection was closed
+        ConnectionClosed,
     }
 
     impl fmt::Debug for Error {
@@ -48,6 +51,7 @@ pub mod simpletcp {
                     f.write_fmt(format_args!("Error::EncryptionError: {}", openssl_err))
                 }
                 Error::TcpError(io_err) => f.write_fmt(format_args!("Error::TcpError: {}", io_err)),
+                Error::ConnectionClosed => f.write_str("Error::ConnectionClosed"),
             };
         }
     }
@@ -305,8 +309,14 @@ pub mod simpletcp {
 
         fn write_raw(&mut self, msg: &[u8]) -> Result<(), Error> {
             let length = msg.len() as u32;
-            self.socket.write(&length.to_le_bytes())?;
-            self.socket.write(msg)?;
+            let bytes_written = self.socket.write(&length.to_le_bytes())?;
+            if bytes_written != 4 {
+                return Err(Error::ConnectionClosed);
+            }
+            let bytes_written = self.socket.write(msg)?;
+            if bytes_written != msg.len() {
+                return Err(Error::ConnectionClosed);
+            }
 
             Ok(())
         }
@@ -318,6 +328,10 @@ pub mod simpletcp {
                 let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
                     self.buffer.resize(start, 0);
                 });
+
+                if bytes_read == 0 {
+                    return Err(Error::ConnectionClosed);
+                }
 
                 self.buffer.resize(start + bytes_read, 0);
                 if self.buffer.len() != 4 {
@@ -332,6 +346,11 @@ pub mod simpletcp {
             let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
                 self.buffer.resize(start, 0);
             });
+
+            if bytes_read == 0 {
+                return Err(Error::ConnectionClosed);
+            }
+
             self.buffer.resize(start + bytes_read, 0);
             if self.buffer.len() == len + 4 {
                 let result = self.buffer[4..].to_vec();
