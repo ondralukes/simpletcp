@@ -1,4 +1,4 @@
-use crate::simpletcp::{TcpServer, TcpStream};
+use crate::simpletcp::{Message, TcpServer, TcpStream};
 use std::io::Write;
 use std::net;
 use std::thread::spawn;
@@ -88,7 +88,10 @@ fn client_write_server_read() {
     spawn(|| {
         let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
         client.wait_until_ready().unwrap();
-        client.write(&[1, 2, 3]).unwrap();
+        let mut msg = Message::new();
+        msg.write_i32(-123);
+        msg.write_i8(-5);
+        client.write(&msg).unwrap();
     });
 
     loop {
@@ -97,7 +100,10 @@ fn client_write_server_read() {
             None => {}
             Some(mut s_client) => {
                 s_client.wait_until_ready().unwrap();
-                assert_eq!(s_client.read().unwrap(), Some(vec![1, 2, 3]));
+                let mut msg = s_client.read().unwrap().unwrap();
+                assert_eq!(msg.read_i32().unwrap(), -123);
+                assert_eq!(msg.read_i8().unwrap(), -5);
+                assert!(msg.read_i32().is_err());
                 break;
             }
         }
@@ -114,7 +120,10 @@ fn server_write_client_read() {
             None => {}
             Some(mut s_client) => {
                 s_client.wait_until_ready().unwrap();
-                s_client.write(&[1, 2, 3]).unwrap();
+                let mut msg = Message::new();
+                msg.write_i64(-12345);
+                msg.write_u8(23);
+                s_client.write(&msg).unwrap();
                 break;
             }
         }
@@ -126,8 +135,9 @@ fn server_write_client_read() {
     loop {
         match client.read().unwrap() {
             None => {}
-            Some(msg) => {
-                assert_eq!(msg, vec![1, 2, 3]);
+            Some(mut msg) => {
+                assert_eq!(msg.read_i64().unwrap(), -12345);
+                assert!(msg.read_i16().is_err());
                 break;
             }
         }

@@ -20,6 +20,7 @@ pub mod simpletcp {
     use rand::RngCore;
     use rand::SeedableRng;
 
+    use MessageError::UnexpectedEnd;
     use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
     #[cfg(test)]
@@ -230,8 +231,8 @@ pub mod simpletcp {
         /// Reads message
         ///
         /// # Returns
-        /// Returns `Some(Vec<u8>)` or `None` if no message has arrived
-        pub fn read(&mut self) -> Result<Option<Vec<u8>>, Error> {
+        /// Returns `Some(Message)` or `None` if no message has arrived
+        pub fn read(&mut self) -> Result<Option<Message>, Error> {
             if self.state != Ready {
                 return Ok(None);
             }
@@ -243,7 +244,7 @@ pub mod simpletcp {
                     let decrypted =
                         symm::decrypt(Cipher::aes_256_cbc(), &self.key, Some(iv), &buf[16..])?;
 
-                    Ok(Some(decrypted))
+                    Ok(Some(Message::from_buffer(decrypted)))
                 }
             }
         }
@@ -253,7 +254,7 @@ pub mod simpletcp {
         /// # Arguments
         ///
         /// * `msg` - Message to be sent
-        pub fn write(&mut self, msg: &[u8]) -> Result<(), Error> {
+        pub fn write(&mut self, msg: &Message) -> Result<(), Error> {
             if self.state != Ready {
                 return Err(Error::NotReady);
             }
@@ -261,7 +262,8 @@ pub mod simpletcp {
             let mut iv = [0; 16];
             self.rand.fill_bytes(&mut iv);
 
-            let mut encrypted = symm::encrypt(Cipher::aes_256_cbc(), &self.key, Some(&iv), msg)?;
+            let mut encrypted =
+                symm::encrypt(Cipher::aes_256_cbc(), &self.key, Some(&iv), &msg.buffer)?;
 
             let mut raw = iv.to_vec();
             raw.append(&mut encrypted);
@@ -283,7 +285,7 @@ pub mod simpletcp {
         /// Tries to complete connection initialization
         ///
         /// # Returns
-        /// Retruns `true` if connection is ready, `false` otherwise
+        /// Returns `true` if connection is ready, `false` otherwise
         pub fn get_ready(&mut self) -> Result<bool, Error> {
             if self.state == Ready {
                 return Ok(true);
@@ -338,6 +340,213 @@ pub mod simpletcp {
             }
 
             Ok(None)
+        }
+    }
+
+    pub struct Message {
+        buffer: Vec<u8>,
+        read_pos: usize,
+    }
+
+    pub enum MessageError {
+        UnexpectedEnd,
+    }
+
+    impl fmt::Debug for MessageError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            match self {
+                UnexpectedEnd => {
+                    return f.write_str("Message has ended unexpectedly.");
+                }
+            }
+        }
+    }
+
+    impl Message {
+        /// Creates new, empty message
+        pub fn new() -> Message {
+            Message {
+                buffer: Vec::new(),
+                read_pos: 0,
+            }
+        }
+
+        fn from_buffer(buffer: Vec<u8>) -> Message {
+            Message {
+                buffer,
+                read_pos: 0,
+            }
+        }
+
+        /// Appends 8-bit unsigned integer to the message
+        pub fn write_u8(&mut self, n: u8) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 8-bit signed integer to the message
+        pub fn write_i8(&mut self, n: i8) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 16-bit unsigned integer to the message
+        pub fn write_u16(&mut self, n: u16) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 16-bit signed integer to the message
+        pub fn write_i16(&mut self, n: i16) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 32-bit unsigned integer to the message
+        pub fn write_u32(&mut self, n: u32) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 32-bit signed integer to the message
+        pub fn write_i32(&mut self, n: i32) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 64-bit unsigned integer to the message
+        pub fn write_u64(&mut self, n: u64) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 64-bit signed integer to the message
+        pub fn write_i64(&mut self, n: i64) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 128-bit unsigned integer to the message
+        pub fn write_u128(&mut self, n: u128) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 128-bit signed integer to the message
+        pub fn write_i128(&mut self, n: i128) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Reads 8-bit unsigned integer and moves read cursor
+        /// # Returns
+        /// `u8` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_u8(&mut self) -> Result<u8, MessageError> {
+            if self.buffer.len() - self.read_pos < 1 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 1];
+            self.read_pos += 1;
+            Ok(u8::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 8-bit signed integer and moves read cursor
+        /// # Returns
+        /// `i8` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_i8(&mut self) -> Result<i8, MessageError> {
+            if self.buffer.len() - self.read_pos < 1 {
+                println!("{:?} {} {}", self.buffer, self.buffer.len(), self.read_pos);
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 1];
+            self.read_pos += 1;
+            Ok(i8::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 16-bit unsigned integer and moves read cursor
+        /// # Returns
+        /// `u16` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_u16(&mut self) -> Result<u16, MessageError> {
+            if self.buffer.len() - self.read_pos < 2 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 2];
+            self.read_pos += 2;
+            Ok(u16::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 16-bit signed integer and moves read cursor
+        /// # Returns
+        /// `i16` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_i16(&mut self) -> Result<i16, MessageError> {
+            if self.buffer.len() - self.read_pos < 2 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 2];
+            self.read_pos += 2;
+            Ok(i16::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 32-bit unsigned integer and moves read cursor
+        /// # Returns
+        /// `u32` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_u32(&mut self) -> Result<u32, MessageError> {
+            if self.buffer.len() - self.read_pos < 4 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 4];
+            self.read_pos += 4;
+            Ok(u32::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 32-bit signed integer and moves read cursor
+        /// # Returns
+        /// `i32` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_i32(&mut self) -> Result<i32, MessageError> {
+            if self.buffer.len() - self.read_pos < 4 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 4];
+            self.read_pos += 4;
+            Ok(i32::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 64-bit unsigned integer and moves read cursor
+        /// # Returns
+        /// `u64` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_u64(&mut self) -> Result<u64, MessageError> {
+            if self.buffer.len() - self.read_pos < 8 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 8];
+            self.read_pos += 8;
+            Ok(u64::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 64-bit signed integer and moves read cursor
+        /// # Returns
+        /// `i64` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_i64(&mut self) -> Result<i64, MessageError> {
+            if self.buffer.len() - self.read_pos < 8 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 8];
+            self.read_pos += 8;
+            Ok(i64::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 128-bit unsigned integer and moves read cursor
+        /// # Returns
+        /// `u128` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_u128(&mut self) -> Result<u128, MessageError> {
+            if self.buffer.len() - self.read_pos < 16 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 16];
+            self.read_pos += 16;
+            Ok(u128::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 128-bit signed integer and moves read cursor
+        /// # Returns
+        /// `i128` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_i128(&mut self) -> Result<i128, MessageError> {
+            if self.buffer.len() - self.read_pos < 16 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 16];
+            self.read_pos += 16;
+            Ok(i128::from_le_bytes(slice.try_into().unwrap()))
         }
     }
 }
