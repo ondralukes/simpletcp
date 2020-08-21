@@ -8,20 +8,19 @@ pub mod simpletcp {
     use std::net::ToSocketAddrs;
 
     extern crate openssl;
-    use openssl::rsa::Rsa;
-    use openssl::pkey::Private;
     use openssl::error::ErrorStack;
+    use openssl::pkey::Private;
     use openssl::rsa::Padding;
+    use openssl::rsa::Rsa;
     use openssl::symm;
     use openssl::symm::Cipher;
 
-
     extern crate rand;
     use rand::prelude::StdRng;
-    use rand::SeedableRng;
     use rand::RngCore;
+    use rand::SeedableRng;
 
-    use State::{NotInitialized, WaitingForSymmKey, WaitingForPublicKey, Ready};
+    use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
     #[cfg(test)]
     mod tests;
@@ -36,7 +35,9 @@ pub mod simpletcp {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             return match self {
                 Error::NotReady => f.write_str("Error::NotReady"),
-                Error::EncryptionError(openssl_err) => f.write_fmt(format_args!("Error::EncryptionError: {}", openssl_err)),
+                Error::EncryptionError(openssl_err) => {
+                    f.write_fmt(format_args!("Error::EncryptionError: {}", openssl_err))
+                }
                 Error::TcpError(io_err) => f.write_fmt(format_args!("Error::TcpError: {}", io_err)),
             };
         }
@@ -48,27 +49,27 @@ pub mod simpletcp {
         }
     }
 
-    impl From<ErrorStack> for Error{
+    impl From<ErrorStack> for Error {
         fn from(openssl_err: ErrorStack) -> Self {
             Error::EncryptionError(openssl_err)
         }
     }
 
-   #[derive(PartialEq)]
-    pub enum State{
+    #[derive(PartialEq)]
+    pub enum State {
         NotInitialized,
         WaitingForPublicKey,
         WaitingForSymmKey,
-        Ready
+        Ready,
     }
 
     pub struct TcpServer {
         socket: net::TcpListener,
-        key: Rsa<Private>
+        key: Rsa<Private>,
     }
 
     impl TcpServer {
-        pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error>{
+        pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
             let key = Rsa::generate(4096)?;
             Self::new_with_key(addr, key)
         }
@@ -82,9 +83,9 @@ pub mod simpletcp {
             match self.socket.accept() {
                 Ok((socket, _addr)) => {
                     let mut stream = TcpStream::from_socket(socket)?;
-                    stream.server_init(&self.key);
+                    stream.server_init(&self.key)?;
                     Ok(Some(stream))
-                },
+                }
                 Err(io_err) => match io_err.kind() {
                     ErrorKind::WouldBlock => Ok(None),
                     _ => Err(Error::TcpError(io_err)),
@@ -94,11 +95,12 @@ pub mod simpletcp {
     }
 
     macro_rules! try_io {
-        ($r: expr) => {
+        ($r: expr, $wb_closure: expr) => {
             match $r {
                 Ok(res) => res,
                 Err(e) => match e.kind() {
                     ErrorKind::WouldBlock => {
+                        $wb_closure();
                         return Ok(None);
                     }
                     _ => {
@@ -115,7 +117,7 @@ pub mod simpletcp {
         key: [u8; 32],
         state: State,
         rsa_key: Option<Rsa<Private>>,
-        rand: StdRng
+        rand: StdRng,
     }
 
     impl TcpStream {
@@ -127,7 +129,7 @@ pub mod simpletcp {
                 key: Default::default(),
                 state: NotInitialized,
                 rsa_key: None,
-                rand: StdRng::from_entropy()
+                rand: StdRng::from_entropy(),
             })
         }
 
@@ -141,11 +143,11 @@ pub mod simpletcp {
                 key: Default::default(),
                 state: WaitingForPublicKey,
                 rsa_key: None,
-                rand: StdRng::from_entropy()
+                rand: StdRng::from_entropy(),
             })
         }
 
-        fn server_init(&mut self, rsa_key: &Rsa<Private>) -> Result<(), Error>{
+        fn server_init(&mut self, rsa_key: &Rsa<Private>) -> Result<(), Error> {
             self.write_raw(&rsa_key.public_key_to_der()?)?;
             self.rsa_key = Some(rsa_key.clone());
             self.state = WaitingForSymmKey;
@@ -154,38 +156,40 @@ pub mod simpletcp {
 
         fn init_step(&mut self) -> Result<(), Error> {
             match self.state {
-                NotInitialized => {
-                    panic!("TcpStream init_step state NotInitialized")
-                },
-                WaitingForPublicKey => {
-                    match self.read_raw()? {
-                        Some(rsa_key) => {
-                            self.rand.fill_bytes(&mut self.key);
+                NotInitialized => panic!("TcpStream init_step state NotInitialized"),
+                WaitingForPublicKey => match self.read_raw()? {
+                    Some(rsa_key) => {
+                        self.rand.fill_bytes(&mut self.key);
 
-                            let rsa_key = Rsa::public_key_from_der(&rsa_key)?;
-                            let mut encrypted_key:Vec<u8> = vec![0; rsa_key.size() as usize];
-                            let encrypted_size = rsa_key.public_encrypt(&self.key, &mut encrypted_key, Padding::PKCS1_OAEP)?;
-                            encrypted_key.resize(encrypted_size, 0);
-                            self.write_raw(&encrypted_key);
-                            self.state = Ready;
-                        },
-                        None => {}
+                        let rsa_key = Rsa::public_key_from_der(&rsa_key)?;
+                        let mut encrypted_key: Vec<u8> = vec![0; rsa_key.size() as usize];
+                        let encrypted_size = rsa_key.public_encrypt(
+                            &self.key,
+                            &mut encrypted_key,
+                            Padding::PKCS1_OAEP,
+                        )?;
+                        encrypted_key.resize(encrypted_size, 0);
+                        self.write_raw(&encrypted_key)?;
+                        self.state = Ready;
                     }
+                    None => {}
                 },
-                WaitingForSymmKey => {
-                    match self.read_raw()? {
-                        Some(encrypted_key) => {
-                            let rsa_key = self.rsa_key.as_ref().unwrap();
-                            let mut key:Vec<u8> = vec![0; rsa_key.size() as usize];
-                            let key_size = rsa_key.private_decrypt(&encrypted_key, &mut key, Padding::PKCS1_OAEP)?;
-                            key.resize(key_size, 0);
-                            assert_eq!(key_size, 32);
+                WaitingForSymmKey => match self.read_raw()? {
+                    Some(encrypted_key) => {
+                        let rsa_key = self.rsa_key.as_ref().unwrap();
+                        let mut key: Vec<u8> = vec![0; rsa_key.size() as usize];
+                        let key_size = rsa_key.private_decrypt(
+                            &encrypted_key,
+                            &mut key,
+                            Padding::PKCS1_OAEP,
+                        )?;
+                        key.resize(key_size, 0);
+                        assert_eq!(key_size, 32);
 
-                            self.key.copy_from_slice(&key);
-                            self.state = Ready;
-                        },
-                        None => {}
+                        self.key.copy_from_slice(&key);
+                        self.state = Ready;
                     }
+                    None => {}
                 },
                 _ => {}
             }
@@ -193,51 +197,61 @@ pub mod simpletcp {
             Ok(())
         }
 
-        pub fn read(&mut self) -> Result<Option<Vec<u8>>, Error>{
-            if self.state != Ready {self.init_step()?;}
-
+        pub fn read(&mut self) -> Result<Option<Vec<u8>>, Error> {
             if self.state != Ready {
                 return Ok(None);
             }
 
-            match self.read_raw()?{
-                None => {
-                    Ok(None)
-                },
+            match self.read_raw()? {
+                None => Ok(None),
                 Some(buf) => {
                     let iv = &buf[..16];
-                    let decrypted = symm::decrypt(
-                        Cipher::aes_256_cbc(),
-                        &self.key,
-                        Some(iv),
-                        &buf[16..]
-                    )?;
+                    let decrypted =
+                        symm::decrypt(Cipher::aes_256_cbc(), &self.key, Some(iv), &buf[16..])?;
 
                     Ok(Some(decrypted))
-                },
+                }
             }
         }
 
-        pub fn write(&mut self, msg: &[u8]) -> Result<(), Error>{
-            if self.state != Ready {self.init_step()?;}
-
+        pub fn write(&mut self, msg: &[u8]) -> Result<(), Error> {
             if self.state != Ready {
-                unimplemented!("Caching writes when not ready");
+                return Err(Error::NotReady);
             }
 
             let mut iv = [0; 16];
             self.rand.fill_bytes(&mut iv);
 
-            let mut encrypted = symm::encrypt(
-                Cipher::aes_256_cbc(),
-                &self.key,
-                Some(&iv),
-                msg
-            )?;
+            let mut encrypted = symm::encrypt(Cipher::aes_256_cbc(), &self.key, Some(&iv), msg)?;
 
             let mut raw = iv.to_vec();
             raw.append(&mut encrypted);
             self.write_raw(&raw)
+        }
+
+        pub fn wait_until_ready(&mut self) -> Result<(), Error> {
+            while !self.get_ready()? {
+                //TODO: Poll the socket or something like that
+            }
+
+            Ok(())
+        }
+
+        pub fn get_ready(&mut self) -> Result<bool, Error> {
+            if self.state == Ready {
+                return Ok(true);
+            }
+            match self.init_step() {
+                Err(e) => match e {
+                    Error::TcpError(io_err) if io_err.kind() == ErrorKind::WouldBlock => {
+                        return Ok(false)
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+
+            Ok(self.state == Ready)
         }
 
         fn write_raw(&mut self, msg: &[u8]) -> Result<(), Error> {
@@ -252,7 +266,9 @@ pub mod simpletcp {
             if self.buffer.len() < 4 {
                 let start = self.buffer.len();
                 self.buffer.resize(4, 0);
-                let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]));
+                let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
+                    self.buffer.resize(start, 0);
+                });
 
                 self.buffer.resize(start + bytes_read, 0);
                 if self.buffer.len() != 4 {
@@ -264,7 +280,9 @@ pub mod simpletcp {
 
             let start = self.buffer.len();
             self.buffer.resize(4 + len, 0);
-            let bytes_read = self.socket.read(&mut self.buffer[start..])?;
+            let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
+                self.buffer.resize(start, 0);
+            });
             self.buffer.resize(start + bytes_read, 0);
             if self.buffer.len() == len + 4 {
                 let result = self.buffer[4..].to_vec();

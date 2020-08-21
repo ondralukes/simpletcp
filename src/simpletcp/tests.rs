@@ -1,6 +1,7 @@
 use crate::simpletcp::{TcpServer, TcpStream};
 use std::io::Write;
 use std::net;
+use std::thread::spawn;
 
 #[test]
 fn create_server() {
@@ -82,21 +83,53 @@ fn raw_fragmented() {
 }
 
 #[test]
-fn read_write(){
+fn client_write_server_read() {
     let server = TcpServer::new("127.0.0.1:1241").expect("Failed to create server");
-    let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
-    let mut s_client = server.accept().unwrap().unwrap();
+    spawn(|| {
+        let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
+        client.wait_until_ready().unwrap();
+        client.write(&[1, 2, 3]).unwrap();
+    });
 
-    client.write(&[1,2,3]).unwrap();
-    assert_eq!(s_client.read().unwrap(), Some(vec![1,2,3]));
+    loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                assert_eq!(s_client.read().unwrap(), Some(vec![1, 2, 3]));
+                break;
+            }
+        }
+    }
 }
 
 #[test]
-fn read_write_cached(){
-    let server = TcpServer::new("127.0.0.1:1241").expect("Failed to create server");
-    let mut client = TcpStream::connect("127.0.0.1:1241").expect("Failed to connect to server");
-    let mut s_client = server.accept().unwrap().unwrap();
+fn server_write_client_read() {
+    let server = TcpServer::new("127.0.0.1:1242").expect("Failed to create server");
 
-    s_client.write(&[1,2,3]).unwrap();
-    assert_eq!(client.read().unwrap(), Some(vec![1,2,3]));
+    spawn(move || loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                s_client.write(&[1, 2, 3]).unwrap();
+                break;
+            }
+        }
+    });
+
+    let mut client = TcpStream::connect("127.0.0.1:1242").expect("Failed to connect to server");
+    client.wait_until_ready().unwrap();
+
+    loop {
+        match client.read().unwrap() {
+            None => {}
+            Some(msg) => {
+                assert_eq!(msg, vec![1, 2, 3]);
+                break;
+            }
+        }
+    }
 }
