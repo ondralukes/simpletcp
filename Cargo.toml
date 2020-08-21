@@ -2,6 +2,12 @@
 name = "simpletcp"
 version = "0.1.0"
 authors = ["ondralukes <mail@ondralukes.cz>"]
+license-file = "LICENSE"
+description = "Crate for simple and secure tcp communication"
+repository = "https://github.com/ondralukes/simpletcp"
+readme = "README.md"
+categories = ["network-programming", "cryptography"]
+keywords = ["tcp", "net", "network"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
