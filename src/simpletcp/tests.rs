@@ -143,3 +143,33 @@ fn server_write_client_read() {
         }
     }
 }
+
+#[test]
+fn message_types(){
+    let mut m = Message::new();
+    m.write_u8(1);
+    m.write_i8(-1);
+    m.write_u16(1);
+    m.write_i16(-1);
+    m.write_u32(1);
+    m.write_i32(-1);
+    m.write_u64(1);
+    m.write_i64(-1);
+    m.write_u128(1);
+    m.write_i128(-1);
+    m.write_f32(0.1);
+    m.write_f64(f64::INFINITY);
+
+    assert_eq!(m.read_u8().unwrap(), 1);
+    assert_eq!(m.read_i8().unwrap(), -1);
+    assert_eq!(m.read_u16().unwrap(), 1);
+    assert_eq!(m.read_i16().unwrap(), -1);
+    assert_eq!(m.read_u32().unwrap(), 1);
+    assert_eq!(m.read_i32().unwrap(), -1);
+    assert_eq!(m.read_u64().unwrap(), 1);
+    assert_eq!(m.read_i64().unwrap(), -1);
+    assert_eq!(m.read_u128().unwrap(), 1);
+    assert_eq!(m.read_i128().unwrap(), -1);
+    assert_eq!(m.read_f32().unwrap(), 0.1);
+    assert_eq!(m.read_f64().unwrap(), f64::INFINITY);
+}

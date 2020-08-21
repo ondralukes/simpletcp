@@ -428,6 +428,16 @@ pub mod simpletcp {
             self.buffer.extend_from_slice(&n.to_le_bytes());
         }
 
+        /// Appends 32-bit float to the message
+        pub fn write_f32(&mut self, n: f32) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
+        /// Appends 64-bit float to the message
+        pub fn write_f64(&mut self, n: f64) {
+            self.buffer.extend_from_slice(&n.to_le_bytes());
+        }
+
         /// Reads 8-bit unsigned integer and moves read cursor
         /// # Returns
         /// `u8` or [MessageError](enum.MessageError.html) if reading failed
@@ -547,6 +557,30 @@ pub mod simpletcp {
             let slice = &self.buffer[self.read_pos..self.read_pos + 16];
             self.read_pos += 16;
             Ok(i128::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 32-bit float and moves read cursor
+        /// # Returns
+        /// `f32` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_f32(&mut self) -> Result<f32, MessageError> {
+            if self.buffer.len() - self.read_pos < 4 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 4];
+            self.read_pos += 4;
+            Ok(f32::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads 64-bit float and moves read cursor
+        /// # Returns
+        /// `f64` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_f64(&mut self) -> Result<f64, MessageError> {
+            if self.buffer.len() - self.read_pos < 4 {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + 8];
+            self.read_pos += 8;
+            Ok(f64::from_le_bytes(slice.try_into().unwrap()))
         }
     }
 }
