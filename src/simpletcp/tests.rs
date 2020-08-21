@@ -145,7 +145,7 @@ fn server_write_client_read() {
 }
 
 #[test]
-fn message_types(){
+fn message_types() {
     let mut m = Message::new();
     m.write_u8(1);
     m.write_i8(-1);
@@ -159,6 +159,7 @@ fn message_types(){
     m.write_i128(-1);
     m.write_f32(0.1);
     m.write_f64(f64::INFINITY);
+    m.write_buffer(&[1, 2, 3, 4]);
 
     assert_eq!(m.read_u8().unwrap(), 1);
     assert_eq!(m.read_i8().unwrap(), -1);
@@ -172,4 +173,5 @@ fn message_types(){
     assert_eq!(m.read_i128().unwrap(), -1);
     assert_eq!(m.read_f32().unwrap(), 0.1);
     assert_eq!(m.read_f64().unwrap(), f64::INFINITY);
+    assert_eq!(m.read_buffer().unwrap(), vec![1, 2, 3, 4]);
 }

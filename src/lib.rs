@@ -438,6 +438,12 @@ pub mod simpletcp {
             self.buffer.extend_from_slice(&n.to_le_bytes());
         }
 
+        /// Appends buffer to the message
+        pub fn write_buffer(&mut self, buf: &[u8]) {
+            self.write_u32(buf.len() as u32);
+            self.buffer.extend_from_slice(buf);
+        }
+
         /// Reads 8-bit unsigned integer and moves read cursor
         /// # Returns
         /// `u8` or [MessageError](enum.MessageError.html) if reading failed
@@ -581,6 +587,19 @@ pub mod simpletcp {
             let slice = &self.buffer[self.read_pos..self.read_pos + 8];
             self.read_pos += 8;
             Ok(f64::from_le_bytes(slice.try_into().unwrap()))
+        }
+
+        /// Reads buffer and moves read cursor
+        /// # Returns
+        /// `Vec<u8>` or [MessageError](enum.MessageError.html) if reading failed
+        pub fn read_buffer(&mut self) -> Result<Vec<u8>, MessageError> {
+            let len = self.read_u32()? as usize;
+            if self.buffer.len() - self.read_pos < len {
+                return Err(UnexpectedEnd);
+            }
+            let slice = &self.buffer[self.read_pos..self.read_pos + len];
+            self.read_pos += len;
+            Ok(slice.to_vec())
         }
     }
 }
