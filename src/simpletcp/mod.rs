@@ -6,6 +6,12 @@ use std::io::{ErrorKind, Read, Write};
 use std::net;
 use std::net::ToSocketAddrs;
 
+#[cfg(unix)]
+use std::os::unix::io::{RawFd, AsRawFd};
+
+#[cfg(windows)]
+use std::os::windows::io::{RawSocket, AsRawSocket};
+
 extern crate openssl;
 
 use openssl::error::ErrorStack;
@@ -21,6 +27,7 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
+use crate::utils::{poll, EV_POLLIN};
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
@@ -284,12 +291,9 @@ impl TcpStream {
     }
 
     /// Blocks the thread until connection is ready to read and write messages
-    ///
-    /// # Notes
-    /// This method repeatedly calls [get_ready](struct.TcpStream.html#method.get_ready) until it returns `true`.
     pub fn wait_until_ready(&mut self) -> Result<(), Error> {
         while !self.get_ready()? {
-            //TODO: Poll the socket or something like that
+            poll(self, EV_POLLIN);
         }
 
         Ok(())
@@ -368,6 +372,20 @@ impl TcpStream {
         }
 
         Ok(None)
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for TcpStream{
+    fn as_raw_fd(&self) -> RawFd{
+        self.socket.as_raw_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsRawSocket for TcpStream{
+    fn as_raw_socket(&self) -> RawSocket{
+        self.socket.as_raw_socket()
     }
 }
 
