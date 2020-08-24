@@ -30,11 +30,13 @@ fn accept() {
     let server = TcpServer::new("127.0.0.1:1237").expect("Failed to create server");
     let _client = TcpStream::connect("127.0.0.1:1237").expect("Failed to connect to server");
 
-    match server.accept().expect("Failed to accept") {
-        None => {
-            panic!("Accept returned None but Some was expected");
+    loop {
+        match server.accept().unwrap(){
+            None => {},
+            Some(_) => {
+                break;
+            },
         }
-        Some(_) => {}
     }
 }
 
@@ -43,12 +45,27 @@ fn raw() {
     let server = TcpServer::new("127.0.0.1:1238").expect("Failed to create server");
     let mut client = TcpStream::connect("127.0.0.1:1238").expect("Failed to connect to server");
 
-    let mut s_client = server.accept().unwrap().unwrap();
+    loop {
+        match server.accept().unwrap(){
+            None => {},
+            Some(mut s_client) => {
+                client.write_raw(&[1, 2, 3]).unwrap();
 
-    client.write_raw(&[1, 2, 3]).unwrap();
-    let recv = s_client.read_raw().unwrap();
+                loop {
+                    match s_client.read_raw().unwrap(){
+                        None => {},
+                        Some(msg) => {
+                            assert_eq!(msg, vec![1, 2, 3]);
+                            break;
+                        },
+                    }
+                }
+                break;
+            },
+        }
+    }
 
-    assert_eq!(recv, Some(vec![1, 2, 3]));
+
 }
 
 #[test]
@@ -64,22 +81,29 @@ fn raw_fragmented() {
     let server = TcpServer::new("127.0.0.1:1240").expect("Failed to create server");
     let mut client =
         net::TcpStream::connect("127.0.0.1:1240").expect("Failed to connect to server");
-    let mut s_client = server.accept().unwrap().unwrap();
+    loop {
+        match server.accept().unwrap(){
+            None => {},
+            Some(mut s_client) => {
+                client.write(&[3, 0]).unwrap();
+                assert_eq!(s_client.read_raw().unwrap(), None);
 
-    client.write(&[3, 0]).unwrap();
-    assert_eq!(s_client.read_raw().unwrap(), None);
+                client.write(&[0]).unwrap();
+                assert_eq!(s_client.read_raw().unwrap(), None);
 
-    client.write(&[0]).unwrap();
-    assert_eq!(s_client.read_raw().unwrap(), None);
+                client.write(&[0, 1, 2]).unwrap();
+                assert_eq!(s_client.read_raw().unwrap(), None);
 
-    client.write(&[0, 1, 2]).unwrap();
-    assert_eq!(s_client.read_raw().unwrap(), None);
+                client.write(&[3, 1, 0]).unwrap();
+                assert_eq!(s_client.read_raw().unwrap(), Some(vec![1, 2, 3]));
 
-    client.write(&[3, 1, 0]).unwrap();
-    assert_eq!(s_client.read_raw().unwrap(), Some(vec![1, 2, 3]));
+                client.write(&[0, 0, 7]).unwrap();
+                assert_eq!(s_client.read_raw().unwrap(), Some(vec![7]));
 
-    client.write(&[0, 0, 7]).unwrap();
-    assert_eq!(s_client.read_raw().unwrap(), Some(vec![7]));
+                break;
+            },
+        }
+    }
 }
 
 #[test]
