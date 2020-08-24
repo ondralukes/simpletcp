@@ -1,6 +1,9 @@
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
+#[cfg(windows)]
+use std::os::windows::io::AsRawSocket;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
@@ -30,13 +33,23 @@ pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool{
 }
 
 #[cfg(windows)]
-pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool{
-    unimplemented!("Windows is not supported.");
+pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool{
+    let fd = socket.as_raw_socket();
+    unsafe {
+        let translated_events = translate_event(event);
+        let revents = c_poll(fd, translated_events, -1);
+        return revents == translated_events;
+    }
 }
 
 #[cfg(windows)]
-pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool{
-    unimplemented!("Windows is not supported.");
+pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> bool{
+    let fd = socket.as_raw_socket();
+    unsafe {
+        let translated_events = translate_event(event);
+        let revents = c_poll(fd, translated_events, timeout);
+        return revents == translated_events;
+    }
 }
 
 unsafe fn translate_event(ev: i16) -> i16{

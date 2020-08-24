@@ -22,7 +22,7 @@ fn poll_read(){
     let time = time.elapsed().as_millis();
 
     assert!(success);
-    assert!(time >= 1000 && time < 1100);
+    assert!(time >= 990 && time < 1100);
 }
 
 #[test]
@@ -42,5 +42,5 @@ fn poll_read_timeout(){
     let time = time.elapsed().as_millis();
 
     assert!(!success);
-    assert!(time >= 500 && time < 550);
+    assert!(time >= 490 && time < 550);
 }
