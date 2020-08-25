@@ -1,8 +1,8 @@
 use crate::simpletcp::{Message, TcpServer, TcpStream};
 use std::io::Write;
 use std::net;
-use std::thread::spawn;
-use std::time::Instant;
+use std::thread::{spawn, sleep};
+use std::time::{Instant, Duration};
 
 #[test]
 fn create_server() {
@@ -208,6 +208,58 @@ fn server_write_client_read() {
             panic!("Timeout");
         }
     }
+}
+
+#[test]
+fn read_timeout_timed_out(){
+    let server = TcpServer::new("127.0.0.1:4242").expect("Failed to create server");
+
+    spawn(move || loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                sleep(Duration::from_millis(1200));
+                break;
+            }
+        }
+    });
+
+    let mut client = TcpStream::connect("127.0.0.1:4242").expect("Failed to connect to server");
+    client.wait_until_ready().unwrap();
+    let time = Instant::now();
+    client.read_timeout(1000).unwrap();
+    let time = time.elapsed().as_millis();
+    assert!(time > 950);
+}
+
+#[test]
+fn read_timeout_success(){
+    let server = TcpServer::new("127.0.0.1:3242").expect("Failed to create server");
+
+    spawn(move || loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                sleep(Duration::from_millis(500));
+                let mut m = Message::new();
+                m.write_u32(1);
+                s_client.write(&m).unwrap();
+                break;
+            }
+        }
+    });
+
+    let mut client = TcpStream::connect("127.0.0.1:3242").expect("Failed to connect to server");
+    client.wait_until_ready().unwrap();
+    let time = Instant::now();
+    let res = client.read_timeout(1000).unwrap();
+    let time = time.elapsed().as_millis();
+    assert!(time > 450 && time < 1000);
+    assert_eq!(res.unwrap().read_u32().unwrap(), 1);
 }
 
 #[test]

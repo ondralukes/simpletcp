@@ -27,9 +27,10 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use crate::utils::{poll, EV_POLLIN};
+use crate::utils::{poll, EV_POLLIN, poll_timeout};
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
+use std::time::Instant;
 
 #[cfg(test)]
 mod tests;
@@ -248,13 +249,13 @@ impl TcpStream {
         Ok(())
     }
 
-    /// Reads a message
+    /// Reads a message non-blocking
     ///
     /// # Returns
     /// Returns `Some(Message)` or `None` if no message has arrived
     pub fn read(&mut self) -> Result<Option<Message>, Error> {
         if self.state != Ready {
-            return Ok(None);
+            return Err(Error::NotReady);
         }
 
         match self.read_raw()? {
@@ -265,6 +266,52 @@ impl TcpStream {
                     symm::decrypt(Cipher::aes_256_cbc(), &self.key, Some(iv), &buf[16..])?;
 
                 Ok(Some(Message::from_buffer(decrypted)))
+            }
+        }
+    }
+
+    /// Reads a message blocking
+    ///
+    /// # Returns
+    /// Returns [Message](struct.Message.html)
+    pub fn read_blocking(&mut self) -> Result<Message, Error> {
+        loop {
+            match self.read()?{
+                None => {
+                    poll(self, EV_POLLIN);
+                },
+                Some(msg) => {
+                    return Ok(msg);
+                },
+            }
+        }
+    }
+
+    /// Reads a message blocking with timeout
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - Timeout in milliseconds
+    /// # Returns
+    /// Returns `Some(Message)` or `None` if reading timed out
+    pub fn read_timeout(&mut self, timeout: i32) -> Result<Option<Message>, Error>{
+        let time= Instant::now();
+        loop {
+            match self.read()?{
+                None => {
+                    println!("Read none");
+                    if timeout < time.elapsed().as_millis() as i32 {
+                        return Ok(None);
+                    }
+                    println!("Poll");
+                    if !poll_timeout(self, EV_POLLIN, timeout) {
+                        return Ok(None);
+                    }
+                },
+                Some(msg) => {
+                    println!("Read some");
+                    return Ok(Some(msg));
+                },
             }
         }
     }
