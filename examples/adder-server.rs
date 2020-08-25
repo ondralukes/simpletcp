@@ -61,7 +61,7 @@ fn main(){
             }
         }
 
-        //Remove closed client
+        //Remove closed clients
         clients.retain(|t|{
             if t.is_none(){
                 println!("Removed client");
