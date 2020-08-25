@@ -2,6 +2,7 @@ use crate::simpletcp::{Message, TcpServer, TcpStream};
 use std::io::Write;
 use std::net;
 use std::thread::spawn;
+use std::time::Instant;
 
 #[test]
 fn create_server() {
@@ -30,12 +31,16 @@ fn accept() {
     let server = TcpServer::new("127.0.0.1:1237").expect("Failed to create server");
     let _client = TcpStream::connect("127.0.0.1:1237").expect("Failed to connect to server");
 
+    let time = Instant::now();
     loop {
         match server.accept().unwrap(){
             None => {},
             Some(_) => {
                 break;
             },
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
         }
     }
 }
@@ -45,6 +50,7 @@ fn raw() {
     let server = TcpServer::new("127.0.0.1:1238").expect("Failed to create server");
     let mut client = TcpStream::connect("127.0.0.1:1238").expect("Failed to connect to server");
 
+    let time = Instant::now();
     loop {
         match server.accept().unwrap(){
             None => {},
@@ -59,9 +65,15 @@ fn raw() {
                             break;
                         },
                     }
+                    if time.elapsed().as_millis() > 500 {
+                        panic!("Timeout");
+                    }
                 }
                 break;
             },
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
         }
     }
 
@@ -81,6 +93,8 @@ fn raw_fragmented() {
     let server = TcpServer::new("127.0.0.1:1240").expect("Failed to create server");
     let mut client =
         net::TcpStream::connect("127.0.0.1:1240").expect("Failed to connect to server");
+
+    let time = Instant::now();
     loop {
         match server.accept().unwrap(){
             None => {},
@@ -95,13 +109,33 @@ fn raw_fragmented() {
                 assert_eq!(s_client.read_raw().unwrap(), None);
 
                 client.write(&[3, 1, 0]).unwrap();
-                assert_eq!(s_client.read_raw().unwrap(), Some(vec![1, 2, 3]));
+                assert_read_raw(&mut s_client, &vec![1, 2, 3]);
 
                 client.write(&[0, 0, 7]).unwrap();
-                assert_eq!(s_client.read_raw().unwrap(), Some(vec![7]));
+                assert_read_raw(&mut s_client, &vec![7]);
 
                 break;
             },
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
+        }
+    }
+}
+
+fn assert_read_raw(socket: &mut TcpStream, expected: &Vec<u8>){
+    let time = Instant::now();
+    loop {
+        match socket.read_raw().unwrap() {
+            None => {},
+            Some(res) => {
+                assert_eq!(&res, expected);
+                break;
+            },
+        }
+
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
         }
     }
 }
@@ -118,6 +152,7 @@ fn client_write_server_read() {
         client.write(&msg).unwrap();
     });
 
+    let time = Instant::now();
     loop {
         let s_client = server.accept().unwrap();
         match s_client {
@@ -130,6 +165,9 @@ fn client_write_server_read() {
                 assert!(msg.read_i32().is_err());
                 break;
             }
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
         }
     }
 }
@@ -156,6 +194,7 @@ fn server_write_client_read() {
     let mut client = TcpStream::connect("127.0.0.1:1242").expect("Failed to connect to server");
     client.wait_until_ready().unwrap();
 
+    let time = Instant::now();
     loop {
         match client.read().unwrap() {
             None => {}
@@ -164,6 +203,9 @@ fn server_write_client_read() {
                 assert!(msg.read_i16().is_err());
                 break;
             }
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
         }
     }
 }
