@@ -328,17 +328,14 @@ impl TcpStream {
         loop {
             match self.read()? {
                 None => {
-                    println!("Read none");
                     if timeout < time.elapsed().as_millis() as i32 {
                         return Ok(None);
                     }
-                    println!("Poll");
                     if !poll_timeout(self, EV_POLLIN, timeout) {
                         return Ok(None);
                     }
                 }
                 Some(msg) => {
-                    println!("Read some");
                     return Ok(Some(msg));
                 }
             }
@@ -585,7 +582,6 @@ impl Message {
     /// `i8` or [MessageError](enum.MessageError.html) if reading failed
     pub fn read_i8(&mut self) -> Result<i8, MessageError> {
         if self.buffer.len() - self.read_pos < 1 {
-            println!("{:?} {} {}", self.buffer, self.buffer.len(), self.read_pos);
             return Err(UnexpectedEnd);
         }
         let slice = &self.buffer[self.read_pos..self.read_pos + 1];
