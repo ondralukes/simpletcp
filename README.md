@@ -26,4 +26,4 @@ msg.write_buffer(&[3, 1, 4, 56]);
 client.write(&msg).unwrap();
 ```
 
-See `examples/example.rs`
+See `examples`
