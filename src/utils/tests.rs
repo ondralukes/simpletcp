@@ -13,6 +13,7 @@ fn poll_read() {
         let (mut socket, _) = server.accept().unwrap();
         sleep(Duration::from_secs(1));
         socket.write(&[1]).unwrap();
+        sleep(Duration::from_millis(500));
     });
 
     let test = TcpStream::connect("127.0.0.1:42345").unwrap();

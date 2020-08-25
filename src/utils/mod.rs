@@ -22,7 +22,7 @@ pub const EV_POLLOUT: i16 = 1 << 1;
 /// * `event` - Event to poll ([EV_POLLIN](constant.EV_POLLIN.html) or [EV_POLLOUT](constant.EV_POLLOUT.html))
 ///
 /// # Returns
-/// `true` if polled event has occured, `false` if not
+/// `true` if polled event has occurred, `false` if not
 #[cfg(unix)]
 pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool {
     let fd = socket.as_raw_fd();
@@ -42,7 +42,7 @@ pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool {
 /// * `timeout` - Timeout in milliseconds
 ///
 /// # Returns
-/// `true` if polled event has occured, `false` if not
+/// `true` if polled event has occurred, `false` if not
 #[cfg(unix)]
 pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool {
     let fd = socket.as_raw_fd();
@@ -61,7 +61,7 @@ pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool {
 /// * `event` - Event to poll ([EV_POLLIN](constant.EV_POLLIN.html) or [EV_POLLOUT](constant.EV_POLLOUT.html))
 ///
 /// # Returns
-/// `true` if polled event has occured, `false` if not
+/// `true` if polled event has occurred, `false` if not
 #[cfg(windows)]
 pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool {
     let fd = socket.as_raw_socket();
@@ -81,7 +81,7 @@ pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool {
 /// * `timeout` - Timeout in milliseconds
 ///
 /// # Returns
-/// `true` if polled event has occured, `false` if not
+/// `true` if polled event has occurred, `false` if not
 #[cfg(windows)]
 pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> bool {
     let fd = socket.as_raw_socket();

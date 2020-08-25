@@ -254,6 +254,7 @@ fn read_timeout_success() {
                 let mut m = Message::new();
                 m.write_u32(1);
                 s_client.write(&m).unwrap();
+                sleep(Duration::from_millis(500));
                 break;
             }
         }
