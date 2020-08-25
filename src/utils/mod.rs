@@ -24,7 +24,7 @@ pub const EV_POLLOUT: i16 = 1 << 1;
 /// # Returns
 /// `true` if polled event has occured, `false` if not
 #[cfg(unix)]
-pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool{
+pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool {
     let fd = socket.as_raw_fd();
     unsafe {
         let translated_events = translate_event(event);
@@ -44,7 +44,7 @@ pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool{
 /// # Returns
 /// `true` if polled event has occured, `false` if not
 #[cfg(unix)]
-pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool{
+pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool {
     let fd = socket.as_raw_fd();
     unsafe {
         let translated_events = translate_event(event);
@@ -63,7 +63,7 @@ pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool{
 /// # Returns
 /// `true` if polled event has occured, `false` if not
 #[cfg(windows)]
-pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool{
+pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool {
     let fd = socket.as_raw_socket();
     unsafe {
         let translated_events = translate_event(event);
@@ -83,7 +83,7 @@ pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool{
 /// # Returns
 /// `true` if polled event has occured, `false` if not
 #[cfg(windows)]
-pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> bool{
+pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> bool {
     let fd = socket.as_raw_socket();
     unsafe {
         let translated_events = translate_event(event);
@@ -92,9 +92,13 @@ pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> boo
     }
 }
 
-unsafe fn translate_event(ev: i16) -> i16{
+unsafe fn translate_event(ev: i16) -> i16 {
     let mut translated = 0;
-    if (ev & EV_POLLIN) != 0 { translated |= platform::ev_pollin; }
-    if (ev & EV_POLLOUT) != 0 { translated |= platform::ev_pollout; }
+    if (ev & EV_POLLIN) != 0 {
+        translated |= platform::ev_pollin;
+    }
+    if (ev & EV_POLLOUT) != 0 {
+        translated |= platform::ev_pollout;
+    }
     translated
 }

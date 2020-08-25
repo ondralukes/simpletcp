@@ -14,25 +14,19 @@ fn main() {
 }
 
 fn server_thread(server: TcpServer) {
-    loop {
-        match server.accept().unwrap() {
-            None => {}
-            Some(mut client) => {
-                println!("[Server] Accepted new client");
-                client.wait_until_ready().unwrap();
-                let mut i = 1;
-                while i <= 3 {
-                    println!("[Server] Sending message [{}/3]", i);
-                    let mut msg = Message::new();
-                    msg.write_f64(1.23455);
-                    msg.write_buffer(&[3, 1, 4, 56]);
-                    client.write(&msg).unwrap();
-                    sleep(Duration::from_secs(1));
-                    i += 1;
-                }
-                break;
-            }
-        }
+    let mut client = server.accept_blocking().unwrap();
+
+    println!("[Server] Accepted new client");
+    client.wait_until_ready().unwrap();
+    let mut i = 1;
+    while i <= 3 {
+        println!("[Server] Sending message [{}/3]", i);
+        let mut msg = Message::new();
+        msg.write_f64(1.23455);
+        msg.write_buffer(&[3, 1, 4, 56]);
+        client.write(&msg).unwrap();
+        sleep(Duration::from_secs(1));
+        i += 1;
     }
 }
 

@@ -7,10 +7,10 @@ use std::net;
 use std::net::ToSocketAddrs;
 
 #[cfg(unix)]
-use std::os::unix::io::{RawFd, AsRawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 #[cfg(windows)]
-use std::os::windows::io::{RawSocket, AsRawSocket};
+use std::os::windows::io::{AsRawSocket, RawSocket};
 
 extern crate openssl;
 
@@ -27,10 +27,10 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use crate::utils::{poll, EV_POLLIN, poll_timeout};
+use crate::utils::{poll, poll_timeout, EV_POLLIN};
+use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
-use std::time::Instant;
 
 #[cfg(test)]
 mod tests;
@@ -136,6 +136,38 @@ impl TcpServer {
             },
         }
     }
+
+    /// Accepts a client blocking
+    ///
+    /// # Returns
+    ///
+    /// Returns accepted [TcpStream](struct.TcpStream.html)
+    pub fn accept_blocking(&self) -> Result<TcpStream, Error> {
+        loop {
+            match self.accept()? {
+                None => {
+                    poll(self, EV_POLLIN);
+                }
+                Some(client) => {
+                    return Ok(client);
+                }
+            };
+        }
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for TcpServer {
+    fn as_raw_fd(&self) -> RawFd {
+        self.socket.as_raw_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsRawSocket for TcpServer {
+    fn as_raw_socket(&self) -> RawSocket {
+        self.socket.as_raw_socket()
+    }
 }
 
 macro_rules! try_io {
@@ -230,11 +262,8 @@ impl TcpStream {
                 Some(encrypted_key) => {
                     let rsa_key = self.rsa_key.as_ref().unwrap();
                     let mut key: Vec<u8> = vec![0; rsa_key.size() as usize];
-                    let key_size = rsa_key.private_decrypt(
-                        &encrypted_key,
-                        &mut key,
-                        Padding::PKCS1_OAEP,
-                    )?;
+                    let key_size =
+                        rsa_key.private_decrypt(&encrypted_key, &mut key, Padding::PKCS1_OAEP)?;
                     key.resize(key_size, 0);
                     assert_eq!(key_size, 32);
 
@@ -276,13 +305,13 @@ impl TcpStream {
     /// Returns [Message](struct.Message.html)
     pub fn read_blocking(&mut self) -> Result<Message, Error> {
         loop {
-            match self.read()?{
+            match self.read()? {
                 None => {
                     poll(self, EV_POLLIN);
-                },
+                }
                 Some(msg) => {
                     return Ok(msg);
-                },
+                }
             }
         }
     }
@@ -294,10 +323,10 @@ impl TcpStream {
     /// * `timeout` - Timeout in milliseconds
     /// # Returns
     /// Returns `Some(Message)` or `None` if reading timed out
-    pub fn read_timeout(&mut self, timeout: i32) -> Result<Option<Message>, Error>{
-        let time= Instant::now();
+    pub fn read_timeout(&mut self, timeout: i32) -> Result<Option<Message>, Error> {
+        let time = Instant::now();
         loop {
-            match self.read()?{
+            match self.read()? {
                 None => {
                     println!("Read none");
                     if timeout < time.elapsed().as_millis() as i32 {
@@ -307,11 +336,11 @@ impl TcpStream {
                     if !poll_timeout(self, EV_POLLIN, timeout) {
                         return Ok(None);
                     }
-                },
+                }
                 Some(msg) => {
                     println!("Read some");
                     return Ok(Some(msg));
-                },
+                }
             }
         }
     }
@@ -423,15 +452,15 @@ impl TcpStream {
 }
 
 #[cfg(unix)]
-impl AsRawFd for TcpStream{
-    fn as_raw_fd(&self) -> RawFd{
+impl AsRawFd for TcpStream {
+    fn as_raw_fd(&self) -> RawFd {
         self.socket.as_raw_fd()
     }
 }
 
 #[cfg(windows)]
-impl AsRawSocket for TcpStream{
-    fn as_raw_socket(&self) -> RawSocket{
+impl AsRawSocket for TcpStream {
+    fn as_raw_socket(&self) -> RawSocket {
         self.socket.as_raw_socket()
     }
 }

@@ -1,12 +1,12 @@
 use crate::utils;
-use std::net::{TcpStream, TcpListener};
-use std::thread::{spawn, sleep};
-use std::io::Write;
-use std::time::{Duration, Instant};
 use crate::utils::EV_POLLIN;
+use std::io::Write;
+use std::net::{TcpListener, TcpStream};
+use std::thread::{sleep, spawn};
+use std::time::{Duration, Instant};
 
 #[test]
-fn poll_read(){
+fn poll_read() {
     let server = TcpListener::bind("127.0.0.1:42345").unwrap();
 
     spawn(move || {
@@ -26,7 +26,7 @@ fn poll_read(){
 }
 
 #[test]
-fn poll_read_timeout(){
+fn poll_read_timeout() {
     let server = TcpListener::bind("127.0.0.1:42365").unwrap();
 
     spawn(move || {
