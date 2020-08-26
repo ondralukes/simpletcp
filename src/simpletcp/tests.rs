@@ -281,7 +281,7 @@ fn buffer_overflow(){
         msg.write_buffer(&buf);
 
         let mut i = 0;
-        while i < 100{
+        while i < 25 {
             client.write(&msg).unwrap();
             i+=1;
         }
@@ -300,11 +300,47 @@ fn buffer_overflow(){
             Some(mut s_client) => {
                 s_client.wait_until_ready().unwrap();
                 let mut i = 0;
-                while i < 100 {
+                while i < 25 {
                     let mut msg = s_client.read_blocking().unwrap();
                     assert_eq!(msg.read_buffer().unwrap(), vec![0; 65537]);
                     i += 1;
                 }
+                break;
+            }
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
+        }
+    }
+}
+
+#[test]
+fn write_blocking(){
+
+    let server = TcpServer::new("127.0.0.1:1481").expect("Failed to create server");
+    spawn(|| {
+        let mut client = TcpStream::connect("127.0.0.1:1481").expect("Failed to connect to server");
+        client.wait_until_ready().unwrap();
+        let buf = [0; 1024*1024];
+        let mut msg = Message::new();
+        msg.write_buffer(&buf);
+        msg.write_f64(1.234);
+
+        client.write_blocking(&msg).unwrap();
+
+        sleep(Duration::from_secs(1));
+    });
+
+    let time = Instant::now();
+    loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                let mut msg = s_client.read_blocking().unwrap();
+                assert_eq!(msg.read_buffer().unwrap(), vec![0; 1024*1024]);
+                assert_eq!(msg.read_f64().unwrap(), 1.234);
                 break;
             }
         }

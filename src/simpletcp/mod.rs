@@ -27,7 +27,7 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use crate::utils::{poll, poll_timeout, EV_POLLIN};
+use crate::utils::{poll, poll_timeout, EV_POLLIN, EV_POLLOUT};
 use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
@@ -366,6 +366,33 @@ impl TcpStream {
         let mut raw = iv.to_vec();
         raw.append(&mut encrypted);
         self.write_raw(&raw)
+    }
+
+    /// Writes a message and blocks until it's completely flushed
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - Message to be sent
+    pub fn write_blocking(&mut self, msg: &Message) -> Result<(), Error> {
+        if self.state != Ready {
+            return Err(Error::NotReady);
+        }
+
+        let mut iv = [0; 16];
+        self.rand.fill_bytes(&mut iv);
+
+        let mut encrypted =
+            symm::encrypt(Cipher::aes_256_cbc(), &self.key, Some(&iv), &msg.buffer)?;
+
+        let mut raw = iv.to_vec();
+        raw.append(&mut encrypted);
+        self.write_raw(&raw)?;
+
+        while !self.flush().unwrap() {
+            poll(self, EV_POLLOUT);
+        }
+
+        Ok(())
     }
 
     /// Blocks the thread until connection is ready to read and write messages
