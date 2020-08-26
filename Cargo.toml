@@ -1,6 +1,6 @@
 [package]
 name = "simpletcp"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["ondralukes <mail@ondralukes.cz>"]
 license-file = "LICENSE"
 description = "Crate for simple and secure tcp communication"
