@@ -31,6 +31,8 @@ use crate::utils::{poll, poll_timeout, EV_POLLIN};
 use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
+use crate::simpletcp::Error::TcpError;
+use std::collections::VecDeque;
 
 #[cfg(test)]
 mod tests;
@@ -192,7 +194,8 @@ macro_rules! try_io {
 /// Communication is encrypted using 256-bit AES-CBC, key is negotiated using 4096-bit RSA.
 pub struct TcpStream {
     socket: net::TcpStream,
-    buffer: Vec<u8>,
+    read_buffer: Vec<u8>,
+    write_buffer: DequeueBuffer,
     key: [u8; 32],
     state: State,
     rsa_key: Option<Rsa<Private>>,
@@ -204,7 +207,8 @@ impl TcpStream {
         socket.set_nonblocking(true)?;
         Ok(Self {
             socket,
-            buffer: Vec::new(),
+            read_buffer: Vec::new(),
+            write_buffer: DequeueBuffer::new(),
             key: Default::default(),
             state: NotInitialized,
             rsa_key: None,
@@ -223,7 +227,8 @@ impl TcpStream {
 
         Ok(Self {
             socket,
-            buffer: Vec::new(),
+            read_buffer: Vec::new(),
+            write_buffer: DequeueBuffer::new(),
             key: Default::default(),
             state: WaitingForPublicKey,
             rsa_key: None,
@@ -393,54 +398,95 @@ impl TcpStream {
         Ok(self.state == Ready)
     }
 
+    pub fn flush(&mut self) -> Result<bool, Error>{
+        if self.write_buffer.is_empty() {
+            return Ok(true);
+        }
+        let bytes_written = self.socket.write(self.write_buffer.peek());
+        if bytes_written.is_err() {
+            let err = bytes_written.as_ref().err().unwrap();
+            if err.kind() != ErrorKind::WouldBlock {
+                return Err(TcpError(bytes_written.err().unwrap()));
+            }
+        } else if bytes_written.as_ref().unwrap() == &0 {
+            return  Err(Error::ConnectionClosed);
+        }
+
+        let bytes_written = bytes_written.unwrap_or(0);
+        self.write_buffer.advance(bytes_written);
+        Ok(self.write_buffer.is_empty())
+    }
+
     fn write_raw(&mut self, msg: &[u8]) -> Result<(), Error> {
         let length = msg.len() as u32;
-        let bytes_written = self.socket.write(&length.to_le_bytes())?;
-        if bytes_written != 4 {
-            return Err(Error::ConnectionClosed);
+        let length_bytes = length.to_le_bytes();
+        let bytes_written = self.socket.write(&length_bytes);
+        if bytes_written.is_err() {
+            let err = bytes_written.as_ref().err().unwrap();
+            if err.kind() != ErrorKind::WouldBlock {
+                return Err(TcpError(bytes_written.err().unwrap()));
+            }
+        } else if bytes_written.as_ref().unwrap() == &0 {
+            return  Err(Error::ConnectionClosed);
         }
-        let bytes_written = self.socket.write(msg)?;
+
+        let bytes_written = bytes_written.unwrap_or(0);
+        if bytes_written != 4 {
+            self.write_buffer.enqueue(&length_bytes[bytes_written..]);
+        }
+        let bytes_written = self.socket.write(msg);
+
+        if bytes_written.is_err() {
+            let err = bytes_written.as_ref().err().unwrap();
+            if err.kind() != ErrorKind::WouldBlock {
+                return Err(TcpError(bytes_written.err().unwrap()));
+            }
+        } else if bytes_written.as_ref().unwrap() == &0 {
+            return  Err(Error::ConnectionClosed);
+        }
+
+        let bytes_written = bytes_written.unwrap_or(0);
         if bytes_written != msg.len() {
-            return Err(Error::ConnectionClosed);
+           self.write_buffer.enqueue(&msg[bytes_written..]);
         }
 
         Ok(())
     }
 
     fn read_raw(&mut self) -> Result<Option<Vec<u8>>, Error> {
-        if self.buffer.len() < 4 {
-            let start = self.buffer.len();
-            self.buffer.resize(4, 0);
-            let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
-                self.buffer.resize(start, 0);
+        if self.read_buffer.len() < 4 {
+            let start = self.read_buffer.len();
+            self.read_buffer.resize(4, 0);
+            let bytes_read = try_io!(self.socket.read(&mut self.read_buffer[start..]), || {
+                self.read_buffer.resize(start, 0);
             });
 
             if bytes_read == 0 {
                 return Err(Error::ConnectionClosed);
             }
 
-            self.buffer.resize(start + bytes_read, 0);
-            if self.buffer.len() != 4 {
+            self.read_buffer.resize(start + bytes_read, 0);
+            if self.read_buffer.len() != 4 {
                 return Ok(None);
             }
         }
 
-        let len = u32::from_le_bytes(self.buffer[..4].try_into().unwrap()) as usize;
+        let len = u32::from_le_bytes(self.read_buffer[..4].try_into().unwrap()) as usize;
 
-        let start = self.buffer.len();
-        self.buffer.resize(4 + len, 0);
-        let bytes_read = try_io!(self.socket.read(&mut self.buffer[start..]), || {
-            self.buffer.resize(start, 0);
+        let start = self.read_buffer.len();
+        self.read_buffer.resize(4 + len, 0);
+        let bytes_read = try_io!(self.socket.read(&mut self.read_buffer[start..]), || {
+            self.read_buffer.resize(start, 0);
         });
 
         if bytes_read == 0 {
             return Err(Error::ConnectionClosed);
         }
 
-        self.buffer.resize(start + bytes_read, 0);
-        if self.buffer.len() == len + 4 {
-            let result = self.buffer[4..].to_vec();
-            self.buffer.clear();
+        self.read_buffer.resize(start + bytes_read, 0);
+        if self.read_buffer.len() == len + 4 {
+            let result = self.read_buffer[4..].to_vec();
+            self.read_buffer.clear();
             return Ok(Some(result));
         }
 
@@ -459,6 +505,40 @@ impl AsRawFd for TcpStream {
 impl AsRawSocket for TcpStream {
     fn as_raw_socket(&self) -> RawSocket {
         self.socket.as_raw_socket()
+    }
+}
+
+struct DequeueBuffer{
+    buffers: VecDeque<Vec<u8>>,
+    start: usize
+}
+
+impl DequeueBuffer {
+    fn new() -> Self{
+        DequeueBuffer{
+            buffers: VecDeque::new(),
+            start: 0
+        }
+    }
+
+    fn enqueue(&mut self, buf: &[u8]){
+        self.buffers.push_back(buf.to_vec());
+    }
+
+    fn peek(&self) -> &[u8]{
+        &self.buffers[0][self.start..]
+    }
+
+    fn advance(&mut self, n: usize){
+        self.start += n;
+        if self.start == self.buffers[0].len() {
+            self.buffers.pop_front();
+            self.start = 0;
+        }
+    }
+
+    fn is_empty(&self) -> bool{
+        self.buffers.is_empty()
     }
 }
 
