@@ -349,6 +349,7 @@ impl TcpStream {
 
     /// Writes a message
     ///
+    /// Message may not be written completely, you should call [flush](struct.TcpStream.html#method.flush) afterwards
     /// # Arguments
     ///
     /// * `msg` - Message to be sent
@@ -425,22 +426,28 @@ impl TcpStream {
         Ok(self.state == Ready)
     }
 
+    /// Attempts to flush pending write operations
+    ///
+    /// # Returns
+    /// `true` if all pending operations were flushed, `false` if there are more operations to flush
     pub fn flush(&mut self) -> Result<bool, Error>{
-        if self.write_buffer.is_empty() {
-            return Ok(true);
-        }
-        let bytes_written = self.socket.write(self.write_buffer.peek());
-        if bytes_written.is_err() {
-            let err = bytes_written.as_ref().err().unwrap();
-            if err.kind() != ErrorKind::WouldBlock {
-                return Err(TcpError(bytes_written.err().unwrap()));
+        while poll_timeout(self, EV_POLLOUT, 0) {
+            if self.write_buffer.is_empty() {
+                return Ok(true);
             }
-        } else if bytes_written.as_ref().unwrap() == &0 {
-            return  Err(Error::ConnectionClosed);
-        }
+            let bytes_written = self.socket.write(self.write_buffer.peek());
+            if bytes_written.is_err() {
+                let err = bytes_written.as_ref().err().unwrap();
+                if err.kind() != ErrorKind::WouldBlock {
+                    return Err(TcpError(bytes_written.err().unwrap()));
+                }
+            } else if bytes_written.as_ref().unwrap() == &0 {
+                return Err(Error::ConnectionClosed);
+            }
 
-        let bytes_written = bytes_written.unwrap_or(0);
-        self.write_buffer.advance(bytes_written);
+            let bytes_written = bytes_written.unwrap_or(0);
+            self.write_buffer.advance(bytes_written);
+        }
         Ok(self.write_buffer.is_empty())
     }
 
