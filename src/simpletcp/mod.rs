@@ -414,11 +414,13 @@ impl TcpStream {
             return Ok(true);
         }
         match self.init_step() {
-            Err(e) => match e {
+            Err(e) => return match e {
                 Error::TcpError(io_err) if io_err.kind() == ErrorKind::WouldBlock => {
-                    return Ok(false)
+                    Ok(false)
                 }
-                _ => {}
+                _ => {
+                    Err(e)
+                }
             },
             _ => {}
         }
