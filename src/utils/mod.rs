@@ -85,6 +85,14 @@ pub fn poll_set(fds: &mut [i32], event: i16) -> i32 {
     poll_set_timeout(fds, event, -1).unwrap()
 }
 
+/// Creates array of raw socket descriptors
+///
+/// # Arguments
+///
+/// * `sockets` - Sockets
+///
+/// # Returns
+/// `Vec` containing socket descriptors
 #[cfg(unix)]
 pub fn get_fd_array<A: AsRawFd>(sockets: &[A]) -> Vec<i32> {
     let mut res = Vec::new();
@@ -165,6 +173,14 @@ pub fn poll_set(fds: &mut [u64], event: i16) -> i32 {
     poll_set_timeout(fds, event, -1).unwrap()
 }
 
+/// Creates array of raw socket descriptors
+///
+/// # Arguments
+///
+/// * `sockets` - Sockets
+///
+/// # Returns
+/// `Vec` containing socket descriptors
 #[cfg(windows)]
 pub fn get_fd_array<A: AsRawSocket>(sockets: &[A]) -> Vec<u64> {
     let mut res = Vec::new();

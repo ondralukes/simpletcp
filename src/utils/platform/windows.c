@@ -1,5 +1,6 @@
 #include "interface.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <winsock2.h>
 
 const short ev_pollin = POLLRDNORM;
