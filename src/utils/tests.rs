@@ -1,5 +1,5 @@
 use crate::utils;
-use crate::utils::EV_POLLIN;
+use crate::utils::{EV_POLLIN, EV_POLLOUT};
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::thread::{sleep, spawn};
@@ -24,6 +24,27 @@ fn poll_read() {
 
     assert!(success);
     assert!(time >= 990 && time < 1100);
+}
+
+#[test]
+fn poll_both() {
+    let server = TcpListener::bind("127.0.0.1:12345").unwrap();
+
+    spawn(move || {
+        let (mut socket, _) = server.accept().unwrap();
+        sleep(Duration::from_secs(1));
+        socket.write(&[1]).unwrap();
+        sleep(Duration::from_millis(500));
+    });
+
+    let test = TcpStream::connect("127.0.0.1:12345").unwrap();
+
+    let time = Instant::now();
+    let success = utils::poll(&test, EV_POLLIN | EV_POLLOUT);
+    let time = time.elapsed().as_millis();
+
+    assert!(success);
+    assert!(time < 10);
 }
 
 #[test]

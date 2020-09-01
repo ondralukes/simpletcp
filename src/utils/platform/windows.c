@@ -16,7 +16,7 @@ int c_poll(Fd* fds, unsigned int length, short events, int timeout){
     WSAPoll(p, length, timeout);
 
     for(unsigned int i = 0;i<length;i++){
-        if(p[i].revents == events){
+        if((p[i].revents & events) != 0){
             free(p);
             return i;
         }
