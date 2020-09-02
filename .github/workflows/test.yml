@@ -25,7 +25,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Downloading OpenSSL and run tests
+      - name: Download OpenSSL and run tests
         run: |
           choco install llvm -y
           Invoke-WebRequest https://mirror.firedaemon.com/OpenSSL/openssl-1.1.1h-dev.zip -OutFile openssl.zip
