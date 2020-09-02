@@ -26,5 +26,6 @@ jobs:
     env:
       OPENSSL_DIR: C:\Program Files\OpenSSL-Win64 
     steps:
+      - uses: actions/checkout@v2
       - name: Run tests
         run: cargo test --verbose
