@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Downloading OpenSSL and run tests
         run: |
+          choco install llvm -y
           Invoke-WebRequest https://mirror.firedaemon.com/OpenSSL/openssl-1.1.1h-dev.zip -OutFile openssl.zip
           Expand-Archive openssl.zip -DestinationPath ./openssl/
           $Env:OPENSSL_DIR=(Resolve-Path .\openssl\openssl-1.1\x64\).Path
