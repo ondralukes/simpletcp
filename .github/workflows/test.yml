@@ -24,7 +24,7 @@ jobs:
   windows-test:
     runs-on: windows-latest
     env:
-      OPENSSL_DIR: C:\Program Files\OpenSSL-Win64 
+      OPENSSL_DIR: C:\Program Files\OpenSSL 
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
