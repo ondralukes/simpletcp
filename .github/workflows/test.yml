@@ -10,20 +10,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
     - uses: actions/checkout@v2
     - name: Run tests
-      if: matrix.os == 'windows-latest'
-      run: |
-        set OPENSSL_DIR=C:\Program Files\OpenSSL-Win64
-        cargo test --verbose
-    - name: Run tests
-      if: matrix.os != 'windows-latest'
       run: cargo test --verbose
+  
+  windows-test:
+    runs-on: windows-latest
+    env:
+      OPENSSL_DIR: C:\Program Files\OpenSSL-Win64 
+    steps:
+      - name: Run tests
+        run: cargo test --verbose
