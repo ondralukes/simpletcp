@@ -23,9 +23,11 @@ jobs:
   
   windows-test:
     runs-on: windows-latest
-    env:
-      OPENSSL_DIR: C:\Program Files\OpenSSL 
     steps:
       - uses: actions/checkout@v2
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Downloading OpenSSL and run tests
+        run: |
+          Invoke-WebRequest https://mirror.firedaemon.com/OpenSSL/openssl-1.1.1h-dev.zip -OutFile openssl.zip
+          Expand-Archive openssl.zip -DestinationPath ./openssl/
+          $Env:OPENSSL_DIR=(Resolve-Path .\openssl\openssl-1.1\x64\).Path
+          cargo test
