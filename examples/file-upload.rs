@@ -1,8 +1,8 @@
 use simpletcp::simpletcp::{Message, TcpServer, TcpStream};
+use std::fs::File;
+use std::io::{stdin, Read};
 use std::thread::{sleep, spawn};
 use std::time::Duration;
-use std::io::{stdin, Read};
-use std::fs::File;
 
 fn main() {
     let server = TcpServer::new("127.0.0.1:4434").unwrap();
@@ -24,15 +24,14 @@ fn server_thread(server: TcpServer) {
     loop {
         match client.read_blocking() {
             Ok(mut msg) => {
-                println!("Received chunk {} size {}",i, msg.read_i32().unwrap());
+                println!("Received chunk {} size {}", i, msg.read_i32().unwrap());
                 i += 1;
-            },
+            }
             Err(err) => {
                 println!("{:?}", err);
                 break;
-            },
+            }
         }
-
     }
 }
 
@@ -43,18 +42,18 @@ fn client_thread() {
     let stdin = stdin();
     let mut filename = String::new();
     stdin.read_line(&mut filename).unwrap();
-    filename.retain(|c|{
-        c != '\n' && c != '\r'
-    });
+    filename.retain(|c| c != '\n' && c != '\r');
 
     let mut file = File::open(filename).unwrap();
 
     let mut i = 0;
-    let mut buf = [0;1024*1024];
+    let mut buf = [0; 1024 * 1024];
     loop {
         println!("[Client] Uploading chunk {}", i);
         let length = file.read(&mut buf).unwrap();
-        if length == 0 {break;}
+        if length == 0 {
+            break;
+        }
         let mut msg = Message::new();
         msg.write_i32(length as i32);
         msg.write_buffer(&buf[..length]);

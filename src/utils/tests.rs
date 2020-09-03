@@ -23,7 +23,7 @@ fn poll_read() {
     let time = time.elapsed().as_millis();
 
     assert!(success);
-    assert!(time >= 990 && time < 1100);
+    assert!(time >= 800 && time < 1100);
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn poll_read_timeout() {
     let time = time.elapsed().as_millis();
 
     assert!(!success);
-    assert!(time >= 490 && time < 550);
+    assert!(time >= 450 && time < 550);
 }
 
 #[test]
@@ -127,5 +127,5 @@ fn poll_set_timeout() {
     let res = utils::poll_set_timeout(&mut fds, EV_POLLIN, 1000);
     let time = time.elapsed().as_millis();
     assert_eq!(res, None);
-    assert!(time > 990 && time < 1100);
+    assert!(time > 800 && time < 1100);
 }

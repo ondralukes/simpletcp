@@ -27,12 +27,12 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
+use crate::simpletcp::Error::TcpError;
 use crate::utils::{poll, poll_timeout, EV_POLLIN, EV_POLLOUT};
+use std::collections::VecDeque;
 use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
-use crate::simpletcp::Error::TcpError;
-use std::collections::VecDeque;
 
 #[cfg(test)]
 mod tests;
@@ -414,14 +414,12 @@ impl TcpStream {
             return Ok(true);
         }
         match self.init_step() {
-            Err(e) => return match e {
-                Error::TcpError(io_err) if io_err.kind() == ErrorKind::WouldBlock => {
-                    Ok(false)
+            Err(e) => {
+                return match e {
+                    Error::TcpError(io_err) if io_err.kind() == ErrorKind::WouldBlock => Ok(false),
+                    _ => Err(e),
                 }
-                _ => {
-                    Err(e)
-                }
-            },
+            }
             _ => {}
         }
 
@@ -432,7 +430,7 @@ impl TcpStream {
     ///
     /// # Returns
     /// `true` if all pending operations were flushed, `false` if there are more operations to flush
-    pub fn flush(&mut self) -> Result<bool, Error>{
+    pub fn flush(&mut self) -> Result<bool, Error> {
         while poll_timeout(self, EV_POLLOUT, 0) {
             if self.write_buffer.is_empty() {
                 return Ok(true);
@@ -463,7 +461,7 @@ impl TcpStream {
                 return Err(TcpError(bytes_written.err().unwrap()));
             }
         } else if bytes_written.as_ref().unwrap() == &0 {
-            return  Err(Error::ConnectionClosed);
+            return Err(Error::ConnectionClosed);
         }
 
         let bytes_written = bytes_written.unwrap_or(0);
@@ -478,12 +476,12 @@ impl TcpStream {
                 return Err(TcpError(bytes_written.err().unwrap()));
             }
         } else if bytes_written.as_ref().unwrap() == &0 {
-            return  Err(Error::ConnectionClosed);
+            return Err(Error::ConnectionClosed);
         }
 
         let bytes_written = bytes_written.unwrap_or(0);
         if bytes_written != msg.len() {
-           self.write_buffer.enqueue(&msg[bytes_written..]);
+            self.write_buffer.enqueue(&msg[bytes_written..]);
         }
 
         Ok(())
@@ -528,6 +526,18 @@ impl TcpStream {
 
         Ok(None)
     }
+
+    /// Sets the value of `TCP_NODELAY`
+    pub fn set_nodelay(&mut self, val: bool) -> Result<(), Error> {
+        self.socket.set_nodelay(val)?;
+        Ok(())
+    }
+
+    /// Gets the value of `TCP_NODELAY`
+    pub fn nodelay(&self) -> Result<bool, Error> {
+        let nodelay = self.socket.nodelay()?;
+        Ok(nodelay)
+    }
 }
 
 #[cfg(unix)]
@@ -544,28 +554,28 @@ impl AsRawSocket for TcpStream {
     }
 }
 
-struct DequeueBuffer{
+struct DequeueBuffer {
     buffers: VecDeque<Vec<u8>>,
-    start: usize
+    start: usize,
 }
 
 impl DequeueBuffer {
-    fn new() -> Self{
-        DequeueBuffer{
+    fn new() -> Self {
+        DequeueBuffer {
             buffers: VecDeque::new(),
-            start: 0
+            start: 0,
         }
     }
 
-    fn enqueue(&mut self, buf: &[u8]){
+    fn enqueue(&mut self, buf: &[u8]) {
         self.buffers.push_back(buf.to_vec());
     }
 
-    fn peek(&self) -> &[u8]{
+    fn peek(&self) -> &[u8] {
         &self.buffers[0][self.start..]
     }
 
-    fn advance(&mut self, n: usize){
+    fn advance(&mut self, n: usize) {
         self.start += n;
         if self.start == self.buffers[0].len() {
             self.buffers.pop_front();
@@ -573,7 +583,7 @@ impl DequeueBuffer {
         }
     }
 
-    fn is_empty(&self) -> bool{
+    fn is_empty(&self) -> bool {
         self.buffers.is_empty()
     }
 }
