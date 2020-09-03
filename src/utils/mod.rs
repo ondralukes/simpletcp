@@ -1,9 +1,9 @@
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
+use std::convert::TryInto;
 #[cfg(windows)]
 use std::os::windows::io::AsRawSocket;
-use std::convert::TryInto;
 
 mod platform {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
@@ -25,8 +25,8 @@ pub const EV_POLLOUT: i16 = 1 << 1;
 /// # Returns
 /// `true` if polled event has occurred, `false` if not
 #[cfg(unix)]
-pub fn poll<A: AsRawFd>(socket: &A  , event: i16) -> bool {
-    poll_timeout(socket, event,-1)
+pub fn poll<A: AsRawFd>(socket: &A, event: i16) -> bool {
+    poll_timeout(socket, event, -1)
 }
 
 /// Polls the socket with timeout
@@ -63,7 +63,12 @@ pub fn poll_timeout<A: AsRawFd>(socket: &A, event: i16, timeout: i32) -> bool {
 pub fn poll_set_timeout(fds: &mut [i32], event: i16, timeout: i32) -> Option<i32> {
     unsafe {
         let translated_events = translate_event(event);
-        let res = platform::c_poll(fds.as_mut_ptr(), fds.len().try_into().unwrap(), translated_events, timeout);
+        let res = platform::c_poll(
+            fds.as_mut_ptr(),
+            fds.len().try_into().unwrap(),
+            translated_events,
+            timeout,
+        );
         if res == -1 {
             return None;
         }
@@ -113,8 +118,8 @@ pub fn get_fd_array<A: AsRawFd>(sockets: &[A]) -> Vec<i32> {
 /// # Returns
 /// `true` if polled event has occurred, `false` if not
 #[cfg(windows)]
-pub fn poll<A: AsRawSocket>(socket: &A  , event: i16) -> bool {
-    poll_timeout(socket, event,-1)
+pub fn poll<A: AsRawSocket>(socket: &A, event: i16) -> bool {
+    poll_timeout(socket, event, -1)
 }
 
 /// Polls the socket with timeout
@@ -151,7 +156,12 @@ pub fn poll_timeout<A: AsRawSocket>(socket: &A, event: i16, timeout: i32) -> boo
 pub fn poll_set_timeout(fds: &mut [u64], event: i16, timeout: i32) -> Option<i32> {
     unsafe {
         let translated_events = translate_event(event);
-        let res = platform::c_poll(fds.as_mut_ptr(), fds.len().try_into().unwrap(), translated_events, timeout);
+        let res = platform::c_poll(
+            fds.as_mut_ptr(),
+            fds.len().try_into().unwrap(),
+            translated_events,
+            timeout,
+        );
         if res == -1 {
             return None;
         }

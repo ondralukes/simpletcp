@@ -1,10 +1,10 @@
-use simpletcp::simpletcp::{TcpStream, Message};
 use rand::prelude::StdRng;
-use rand::{SeedableRng, RngCore};
+use rand::{RngCore, SeedableRng};
+use simpletcp::simpletcp::{Message, TcpStream};
 use std::convert::TryInto;
 use std::time::Instant;
 
-fn main(){
+fn main() {
     println!("Connecting");
     let mut conn = TcpStream::connect("127.0.0.1:4328").unwrap();
     conn.wait_until_ready().unwrap();
@@ -12,7 +12,7 @@ fn main(){
 
     let mut rand = StdRng::from_entropy();
     loop {
-        let mut rand_buffer = [8;8];
+        let mut rand_buffer = [8; 8];
         rand.fill_bytes(&mut rand_buffer[0..8]);
 
         rand_buffer[3] = 0;
@@ -28,6 +28,10 @@ fn main(){
         conn.write(&message).unwrap();
 
         let mut response = conn.read_blocking().unwrap();
-        println!("{:010} [{} us]", response.read_i32().unwrap(), time.elapsed().as_micros());
+        println!(
+            "{:010} [{} us]",
+            response.read_i32().unwrap(),
+            time.elapsed().as_micros()
+        );
     }
 }
