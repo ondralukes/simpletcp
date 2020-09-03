@@ -527,11 +527,13 @@ impl TcpStream {
         Ok(None)
     }
 
+    /// Sets the value of `TCP_NODELAY`
     pub fn set_nodelay(&mut self, val: bool) -> Result<(), Error> {
         self.socket.set_nodelay(val)?;
         Ok(())
     }
 
+    /// Gets the value of `TCP_NODELAY`
     pub fn nodelay(&self) -> Result<bool, Error> {
         let nodelay = self.socket.nodelay()?;
         Ok(nodelay)
