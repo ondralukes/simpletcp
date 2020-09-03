@@ -1,8 +1,9 @@
 [package]
 name = "simpletcp"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["ondralukes <mail@ondralukes.cz>"]
 license-file = "LICENSE"
+license = "MIT"
 description = "Crate for simple and secure tcp communication"
 repository = "https://github.com/ondralukes/simpletcp"
 readme = "README.md"
