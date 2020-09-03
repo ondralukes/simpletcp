@@ -528,6 +528,16 @@ impl TcpStream {
 
         Ok(None)
     }
+
+    pub fn set_nodelay(&mut self, val: bool) -> Result<(), Error>{
+        self.socket.set_nodelay(val)?;
+        Ok(())
+    }
+
+    pub fn nodelay(&self) -> Result<bool, Error>{
+        let nodelay = self.socket.nodelay()?;
+        Ok(nodelay)
+    }
 }
 
 #[cfg(unix)]
