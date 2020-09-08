@@ -1,4 +1,4 @@
-use crate::simpletcp::{Message, TcpServer, TcpStream};
+use crate::simpletcp::{Error, Message, TcpServer, TcpStream};
 use std::io::Write;
 use std::net;
 use std::thread::{sleep, spawn};
@@ -382,4 +382,35 @@ fn message_types() {
     assert_eq!(m.read_f32().unwrap(), 0.1);
     assert_eq!(m.read_f64().unwrap(), f64::INFINITY);
     assert_eq!(m.read_buffer().unwrap(), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn size_exceed() {
+    let server = TcpServer::new("127.0.0.1:1841").expect("Failed to create server");
+    spawn(|| {
+        let mut client = TcpStream::connect("127.0.0.1:1841").expect("Failed to connect to server");
+        client.wait_until_ready().unwrap();
+        client.socket.write_all(&[255, 255, 255, 255]).unwrap();
+    });
+
+    let time = Instant::now();
+    loop {
+        let s_client = server.accept().unwrap();
+        match s_client {
+            None => {}
+            Some(mut s_client) => {
+                s_client.wait_until_ready().unwrap();
+                let read = s_client.read();
+                assert!(read.is_err());
+                match read.err().unwrap() {
+                    Error::SizeLimitExceeded => {}
+                    _ => panic!("Received unexpected error type"),
+                }
+                break;
+            }
+        }
+        if time.elapsed().as_millis() > 500 {
+            panic!("Timeout");
+        }
+    }
 }

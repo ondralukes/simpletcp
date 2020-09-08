@@ -51,6 +51,9 @@ fn main() {
                         println!("Error::ConnectionClosed");
                         client_opt.take();
                     }
+                    Error::SizeLimitExceeded => {
+                        println!("Error::SizeLimitExceeded");
+                    }
                 },
             }
         }

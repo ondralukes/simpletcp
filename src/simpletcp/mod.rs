@@ -34,6 +34,8 @@ use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
+const MSG_SIZE_LIMIT: usize = 4 * 1024 * 1024;
+
 #[cfg(test)]
 mod tests;
 
@@ -52,6 +54,9 @@ pub enum Error {
 
     /// TCP connection was closed
     ConnectionClosed,
+
+    /// Received header of message that would exceed size limit (4 MiB)
+    SizeLimitExceeded,
 }
 
 impl fmt::Debug for Error {
@@ -63,6 +68,7 @@ impl fmt::Debug for Error {
             }
             Error::TcpError(io_err) => f.write_fmt(format_args!("Error::TcpError: {}", io_err)),
             Error::ConnectionClosed => f.write_str("Error::ConnectionClosed"),
+            Error::SizeLimitExceeded => f.write_str("Error::SizeLimitExceeded"),
         };
     }
 }
@@ -506,6 +512,10 @@ impl TcpStream {
         }
 
         let len = u32::from_le_bytes(self.read_buffer[..4].try_into().unwrap()) as usize;
+        if len > MSG_SIZE_LIMIT {
+            self.read_buffer.clear();
+            return Err(Error::SizeLimitExceeded);
+        }
 
         let start = self.read_buffer.len();
         self.read_buffer.resize(4 + len, 0);
