@@ -64,7 +64,7 @@ fn poll_read_timeout() {
     let time = time.elapsed().as_millis();
 
     assert!(!success);
-    assert!(time >= 450 && time < 550);
+    assert!(time >= 400 && time < 600);
 }
 
 #[test]
