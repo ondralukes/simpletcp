@@ -129,3 +129,37 @@ fn poll_set_timeout() {
     assert_eq!(res, None);
     assert!(time > 800 && time < 1100);
 }
+
+#[test]
+fn poll_set_ev() {
+    let server = TcpListener::bind("127.0.0.1:43395").unwrap();
+
+    spawn(|| {
+        let mut sockets = Vec::new();
+        loop {
+            sockets.push(TcpStream::connect("127.0.0.1:43395").unwrap());
+            if sockets.len() == 20 {
+                break;
+            }
+        }
+        sockets[5].write_all(&[1]).unwrap();
+        sleep(Duration::from_millis(100));
+        sockets[4].write_all(&[1]).unwrap();
+        sleep(Duration::from_millis(100));
+    });
+    let mut sockets = Vec::new();
+
+    loop {
+        let (socket, _) = server.accept().unwrap();
+        sockets.push(socket);
+        if sockets.len() == 20 {
+            break;
+        }
+    }
+
+    let mut fds = utils::get_fd_array(&sockets);
+    let mut events = vec![EV_POLLIN; 20];
+    events[5] = 0;
+    let res = utils::poll_set_ev(&mut fds, &mut events);
+    assert_eq!(res, 4);
+}

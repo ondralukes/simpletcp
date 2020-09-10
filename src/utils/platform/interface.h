@@ -10,4 +10,5 @@ typedef int Fd;
 const short ev_pollin;
 const short ev_pollout;
 int c_poll(Fd* fds, unsigned int length, short events, int timeout);
+int c_poll_ev(Fd* fds, short *events, unsigned int length, int timeout);
 #endif //SIMPLETCP_UNIX_H
