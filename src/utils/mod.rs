@@ -91,15 +91,15 @@ pub fn poll_set_timeout(fds: &mut [i32], event: i16, timeout: i32) -> Option<i32
 }
 
 #[cfg(unix)]
-pub fn poll_set_ev(fds: &mut [i32], event: &mut [i16]) -> i32 {
-    poll_set_ev_timeout(fds, event, -1).unwrap()
+pub fn poll_set_ev(fds: &mut [i32], events: &mut [i16]) -> i32 {
+    poll_set_ev_timeout(fds, events, -1).unwrap()
 }
 
 #[cfg(unix)]
-pub fn poll_set_ev_timeout(fds: &mut [i32], event: &mut [i16], timeout: i32) -> Option<i32> {
+pub fn poll_set_ev_timeout(fds: &mut [i32], events: &mut [i16], timeout: i32) -> Option<i32> {
     unsafe {
         let mut translated = Vec::new();
-        for e in event {
+        for e in events {
             translated.push(translate_event(*e));
         }
         let res = platform::c_poll_ev(
@@ -206,6 +206,31 @@ pub fn poll_set_timeout(fds: &mut [u64], event: i16, timeout: i32) -> Option<i32
 #[cfg(windows)]
 pub fn poll_set(fds: &mut [u64], event: i16) -> i32 {
     poll_set_timeout(fds, event, -1).unwrap()
+}
+
+#[cfg(windows)]
+pub fn poll_set_ev_timeout(fds: &mut [u64], events: &mut [i16], timeout: i32) -> Option<i32> {
+    unsafe {
+        let mut translated = Vec::new();
+        for e in events {
+            translated.push(translate_event(*e));
+        }
+        let res = platform::c_poll_ev(
+            fds.as_mut_ptr(),
+            translated,
+            fds.len().try_into().unwrap(),
+            timeout,
+        );
+        if res == -1 {
+            return None;
+        }
+        return Some(res);
+    }
+}
+
+#[cfg(windows)]
+pub fn poll_set_ev(fds: &mut [u64], events: &mut [i16]) -> i32 {
+    poll_set_ev_timeout(fds, events, -1).unwrap()
 }
 
 /// Creates array of raw socket descriptors
