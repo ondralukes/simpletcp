@@ -847,14 +847,14 @@ impl Message {
 
     /// Reads buffer and moves read cursor
     /// # Returns
-    /// `Vec<u8>` or [MessageError](enum.MessageError.html) if reading failed
-    pub fn read_buffer(&mut self) -> Result<Vec<u8>, MessageError> {
+    /// `&[u8]` or [MessageError](enum.MessageError.html) if reading failed
+    pub fn read_buffer(&mut self) -> Result<&[u8], MessageError> {
         let len = self.read_u32()? as usize;
         if self.buffer.len() - self.read_pos < len {
             return Err(UnexpectedEnd);
         }
         let slice = &self.buffer[self.read_pos..self.read_pos + len];
         self.read_pos += len;
-        Ok(slice.to_vec())
+        Ok(slice)
     }
 }

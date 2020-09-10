@@ -305,7 +305,9 @@ fn buffer_overflow() {
                 let mut i = 0;
                 while i < 25 {
                     let mut msg = s_client.read_blocking().unwrap();
-                    assert_eq!(msg.read_buffer().unwrap(), vec![0; 65537]);
+                    let mut check = Vec::new();
+                    check.resize(65537, 0);
+                    assert_eq!(msg.read_buffer().unwrap(), &check[..]);
                     i += 1;
                 }
                 break;
@@ -341,7 +343,7 @@ fn write_blocking() {
             Some(mut s_client) => {
                 s_client.wait_until_ready().unwrap();
                 let mut msg = s_client.read_blocking().unwrap();
-                assert_eq!(msg.read_buffer().unwrap(), vec![0; 1024 * 1024]);
+                assert_eq!(msg.read_buffer().unwrap(), &vec![0; 1024 * 1024][..]);
                 assert_eq!(msg.read_f64().unwrap(), 1.234);
                 break;
             }
@@ -381,7 +383,7 @@ fn message_types() {
     assert_eq!(m.read_i128().unwrap(), -1);
     assert_eq!(m.read_f32().unwrap(), 0.1);
     assert_eq!(m.read_f64().unwrap(), f64::INFINITY);
-    assert_eq!(m.read_buffer().unwrap(), vec![1, 2, 3, 4]);
+    assert_eq!(m.read_buffer().unwrap(), &[1, 2, 3, 4]);
 }
 
 #[test]
