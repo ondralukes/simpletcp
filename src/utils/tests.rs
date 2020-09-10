@@ -132,12 +132,12 @@ fn poll_set_timeout() {
 
 #[test]
 fn poll_set_ev() {
-    let server = TcpListener::bind("127.0.0.1:43365").unwrap();
+    let server = TcpListener::bind("127.0.0.1:43395").unwrap();
 
     spawn(|| {
         let mut sockets = Vec::new();
         loop {
-            sockets.push(TcpStream::connect("127.0.0.1:43365").unwrap());
+            sockets.push(TcpStream::connect("127.0.0.1:43395").unwrap());
             if sockets.len() == 20 {
                 break;
             }
