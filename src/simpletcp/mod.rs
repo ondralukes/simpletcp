@@ -5,6 +5,8 @@ use std::io;
 use std::io::{ErrorKind, Read, Write};
 use std::net;
 use std::net::ToSocketAddrs;
+use std::collections::VecDeque;
+use std::time::Instant;
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -20,6 +22,7 @@ use openssl::rsa::Padding;
 use openssl::rsa::Rsa;
 use openssl::symm;
 use openssl::symm::Cipher;
+use openssl::sha::sha256;
 
 extern crate rand;
 
@@ -27,11 +30,8 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use self::openssl::sha::sha256;
-use crate::simpletcp::Error::TcpError;
+use Error::TcpError;
 use crate::utils::{poll, poll_timeout, EV_POLLIN, EV_POLLOUT};
-use std::collections::VecDeque;
-use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
