@@ -1,6 +1,6 @@
 [package]
 name = "simpletcp"
-version = "1.2.0"
+version = "1.2.1"
 authors = ["ondralukes <mail@ondralukes.cz>"]
 license-file = "LICENSE"
 license = "MIT"

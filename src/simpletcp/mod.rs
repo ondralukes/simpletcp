@@ -466,7 +466,7 @@ impl TcpStream {
     /// Returns server key fingerprint
     ///
     /// Useful for server verification
-    pub fn fingerprint(&mut self) -> [u8; 32] {
+    pub fn fingerprint(&self) -> [u8; 32] {
         match self.state {
             Ready => {}
             _ => panic!("fingerprint(): NotReady"),
