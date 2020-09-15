@@ -416,3 +416,39 @@ fn size_exceed() {
         }
     }
 }
+
+#[test]
+fn fingerprint(){
+    let mut server = TcpServer::new("127.0.0.1:5241").expect("Failed to create server");
+    let key = server.key();
+
+    spawn(move || {
+        let time = Instant::now();
+        let mut switched = false;
+        loop {
+            let s_client = server.accept().unwrap();
+            match s_client {
+                None => {}
+                Some(mut s_client) => {
+                    s_client.wait_until_ready().unwrap();
+                    if switched {
+                        break;
+                    }
+                    server = TcpServer::new_with_key("127.0.0.1:12415", Some(&key)).expect("Failed to create server");
+                    switched = true;
+                }
+            }
+            if time.elapsed().as_millis() > 5000 {
+                panic!("Timeout");
+            }
+        }
+    });
+
+    let mut client = TcpStream::connect("127.0.0.1:5241").expect("Failed to connect to server");
+    client.wait_until_ready().unwrap();
+    let fingerprint = client.fingerprint();
+    sleep(Duration::from_millis(2000));
+    client = TcpStream::connect("127.0.0.1:12415").expect("Failed to connect to server");
+    client.wait_until_ready().unwrap();
+    assert_eq!(client.fingerprint(), fingerprint);
+}

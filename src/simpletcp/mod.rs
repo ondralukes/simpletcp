@@ -5,6 +5,8 @@ use std::io;
 use std::io::{ErrorKind, Read, Write};
 use std::net;
 use std::net::ToSocketAddrs;
+use std::collections::VecDeque;
+use std::time::Instant;
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -20,6 +22,7 @@ use openssl::rsa::Padding;
 use openssl::rsa::Rsa;
 use openssl::symm;
 use openssl::symm::Cipher;
+use openssl::sha::sha256;
 
 extern crate rand;
 
@@ -27,10 +30,8 @@ use rand::prelude::StdRng;
 use rand::RngCore;
 use rand::SeedableRng;
 
-use crate::simpletcp::Error::TcpError;
+use Error::TcpError;
 use crate::utils::{poll, poll_timeout, EV_POLLIN, EV_POLLOUT};
-use std::collections::VecDeque;
-use std::time::Instant;
 use MessageError::UnexpectedEnd;
 use State::{NotInitialized, Ready, WaitingForPublicKey, WaitingForSymmKey};
 
@@ -116,14 +117,39 @@ impl TcpServer {
     ///
     /// * `addr` - Address to listen on
     pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
-        let key = Rsa::generate(4096)?;
-        Self::new_with_key(addr, key)
+        Self::new_with_key(addr, None)
     }
 
-    fn new_with_key<A: ToSocketAddrs>(addr: A, key: Rsa<Private>) -> Result<Self, Error> {
+    /// Creates new TcpServer with specified key
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - Address to listen on
+    /// * `key_der`
+    ///     * `Some(&[u8])` - Key in DER format
+    ///     * `None` - New key will be generated
+    ///
+    /// # Panics
+    /// Panics if key size is not 4096 bits
+    pub fn new_with_key<A: ToSocketAddrs>(addr: A, key_der: Option<&[u8]>) -> Result<Self, Error> {
+        let key;
+        match key_der {
+            None => {
+                key = Rsa::generate(4096)?;
+            }
+            Some(der) => {
+                key = Rsa::private_key_from_der(der)?;
+                assert_eq!(key.size(), 4096/8);
+            }
+        }
         let socket = net::TcpListener::bind(addr)?;
         socket.set_nonblocking(true)?;
         return Ok(Self { socket, key });
+    }
+
+    /// Returns RSA key in DER format
+    pub fn key(&self) -> Vec<u8> {
+        self.key.private_key_to_der().unwrap()
     }
 
     /// Accepts a client
@@ -205,6 +231,7 @@ pub struct TcpStream {
     key: [u8; 32],
     state: State,
     rsa_key: Option<Rsa<Private>>,
+    fingerprint: [u8; 32],
     rand: StdRng,
 }
 
@@ -218,6 +245,7 @@ impl TcpStream {
             key: Default::default(),
             state: NotInitialized,
             rsa_key: None,
+            fingerprint: [0; 32],
             rand: StdRng::from_entropy(),
         })
     }
@@ -239,11 +267,14 @@ impl TcpStream {
             state: WaitingForPublicKey,
             rsa_key: None,
             rand: StdRng::from_entropy(),
+            fingerprint: [0; 32],
         })
     }
 
     fn server_init(&mut self, rsa_key: &Rsa<Private>) -> Result<(), Error> {
-        self.write_raw(&rsa_key.public_key_to_der()?)?;
+        let raw = rsa_key.public_key_to_der()?;
+        self.fingerprint = sha256(&raw);
+        self.write_raw(&raw)?;
         self.rsa_key = Some(rsa_key.clone());
         self.state = WaitingForSymmKey;
         Ok(())
@@ -255,7 +286,7 @@ impl TcpStream {
             WaitingForPublicKey => match self.read_raw()? {
                 Some(rsa_key) => {
                     self.rand.fill_bytes(&mut self.key);
-
+                    self.fingerprint = sha256(&rsa_key);
                     let rsa_key = Rsa::public_key_from_der(&rsa_key)?;
                     let mut encrypted_key: Vec<u8> = vec![0; rsa_key.size() as usize];
                     let encrypted_size = rsa_key.public_encrypt(
@@ -430,6 +461,17 @@ impl TcpStream {
         }
 
         Ok(self.state == Ready)
+    }
+
+    /// Returns server key fingerprint
+    ///
+    /// Useful for server verification
+    pub fn fingerprint(&mut self) -> [u8; 32] {
+        match self.state {
+            Ready => {}
+            _ => panic!("fingerprint(): NotReady"),
+        }
+        self.fingerprint
     }
 
     /// Attempts to flush pending write operations
