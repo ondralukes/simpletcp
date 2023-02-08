@@ -20,4 +20,4 @@ rand = "0.8.3"
 
 [build-dependencies]
 cc = { version = "1.0.59", features = ["parallel"] }
-bindgen = "0.55.0"
+bindgen = "0.64.0"
